@@ -41,6 +41,7 @@ add_library(vkbootstrap STATIC
     src/Swapchain.cpp
     src/FrameSync.cpp
     src/Allocator.cpp
+    src/App.cpp
 )
 target_include_directories(vkbootstrap PUBLIC src)
 target_link_libraries(vkbootstrap PUBLIC volk SDL3::SDL3 glm vma)
