@@ -24,6 +24,7 @@ struct VulkanContext {
     VkPhysicalDeviceVulkan12Features vulkan12Features{};
     VkPhysicalDeviceVulkan13Features vulkan13Features{};
     VkPhysicalDeviceVulkan14Features vulkan14Features{};
+    VkPhysicalDeviceUnifiedImageLayoutsFeaturesKHR unifiedImageLayoutsFeatures{};
 
     bool enableValidation = false;
     std::vector<const char*> activeLayers;

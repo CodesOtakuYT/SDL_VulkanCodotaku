@@ -134,6 +134,9 @@ bool VulkanContext::pickPhysicalDevice() {
             vulkan13Features.pNext = &vulkan14Features;
 
             vulkan14Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES;
+            vulkan14Features.pNext = &unifiedImageLayoutsFeatures;
+
+            unifiedImageLayoutsFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_UNIFIED_IMAGE_LAYOUTS_FEATURES_KHR;
 
             vkGetPhysicalDeviceFeatures2(physicalDevice, &deviceFeatures2);
 
@@ -161,6 +164,11 @@ void VulkanContext::queryFeatureSupport() {
     deviceFeatures2.pNext = &vulkan12Features;
     vulkan12Features.pNext = &vulkan13Features;
     vulkan13Features.pNext = &vulkan14Features;
+    vulkan14Features.pNext = &unifiedImageLayoutsFeatures;
+
+    unifiedImageLayoutsFeatures = {};
+    unifiedImageLayoutsFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_UNIFIED_IMAGE_LAYOUTS_FEATURES_KHR;
+    unifiedImageLayoutsFeatures.unifiedImageLayouts = VK_TRUE;
 }
 
 bool VulkanContext::createLogicalDevice() {
@@ -177,7 +185,7 @@ bool VulkanContext::createLogicalDevice() {
         queueCreateInfos.push_back(queueInfo);
     }
 
-    std::vector<const char*> deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+    std::vector<const char*> deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_KHR_UNIFIED_IMAGE_LAYOUTS_EXTENSION_NAME};
 
     VkDeviceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;

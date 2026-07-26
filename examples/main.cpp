@@ -1,7 +1,6 @@
 #include "App.h"
 #include "Shader.h"
-#include <volk.h>
-#include <vk_mem_alloc.h>
+#include "Sync.h"
 #include <glm/glm.hpp>
 #include <cstdio>
 
@@ -192,40 +191,17 @@ class TriangleApp : public App {
     }
 
     void recordFrame(const FrameInfo& frame) override {
-        auto& ctx = getContext();
         VkCommandBuffer cmd = frame.commandBuffer;
 
-        // Transition: UNDEFINED -> COLOR_ATTACHMENT_OPTIMAL (sync2)
-        VkImageMemoryBarrier2 barrier{};
-        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-        barrier.srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
-        barrier.srcAccessMask = 0;
-        barrier.dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-        barrier.dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-        barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.image = getSwapchain().images[frame.imageIndex];
-        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        barrier.subresourceRange.baseMipLevel = 0;
-        barrier.subresourceRange.levelCount = 1;
-        barrier.subresourceRange.baseArrayLayer = 0;
-        barrier.subresourceRange.layerCount = 1;
-
-        VkDependencyInfo depInfo{};
-        depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-        depInfo.imageMemoryBarrierCount = 1;
-        depInfo.pImageMemoryBarriers = &barrier;
-
-        vkCmdPipelineBarrier2(cmd, &depInfo);
+        // Discard previous contents, transition to GENERAL
+        sync::discardToGeneral(cmd, getSwapchain().images[frame.imageIndex]);
 
         // Begin rendering
         VkClearValue clearValue = {{{0.01f, 0.01f, 0.033f, 1.0f}}};
         VkRenderingAttachmentInfo colorAttachment{};
         colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
         colorAttachment.imageView = frame.imageView;
-        colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        colorAttachment.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         colorAttachment.clearValue = clearValue;
@@ -266,15 +242,8 @@ class TriangleApp : public App {
 
         vkCmdEndRendering(cmd);
 
-        // Transition: COLOR_ATTACHMENT_OPTIMAL -> PRESENT_SRC (sync2)
-        barrier.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-        barrier.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-        barrier.dstStageMask = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT;
-        barrier.dstAccessMask = 0;
-        barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-        vkCmdPipelineBarrier2(cmd, &depInfo);
+        // Transition to present
+        sync::toPresent(cmd, getSwapchain().images[frame.imageIndex]);
     }
 
     void cleanup() override {
