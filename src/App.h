@@ -3,6 +3,7 @@
 #include "Swapchain.h"
 #include "FrameSync.h"
 #include "Allocator.h"
+#include <SDL3/SDL.h>
 
 struct FrameInfo {
     uint32_t imageIndex;
@@ -43,8 +44,6 @@ private:
     void recreateSurfaceAndSwapchain();
     bool acquireNextFrame(uint32_t& imageIndex);
     void submitFrame(uint32_t imageIndex);
-
-    static bool eventFilter(void* userdata, SDL_Event* event);
 
     VulkanContext ctx;
     VulkanSwapchain swap;

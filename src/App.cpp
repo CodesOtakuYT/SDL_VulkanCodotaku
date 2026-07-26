@@ -11,28 +11,6 @@ static void check(bool ok, const char* msg) {
     }
 }
 
-bool App::eventFilter(void* userdata, SDL_Event* event) {
-    auto* app = static_cast<App*>(userdata);
-
-    switch (event->type) {
-    case SDL_EVENT_WILL_ENTER_BACKGROUND:
-        app->state = AppState::Backgrounded;
-        app->background();
-        break;
-
-    case SDL_EVENT_DID_ENTER_FOREGROUND:
-        app->state = AppState::Running;
-        app->recreateSurfaceAndSwapchain();
-        app->foreground();
-        break;
-
-    default:
-        break;
-    }
-
-    return true;
-}
-
 void App::run(const char* title, uint32_t w, uint32_t h) {
     check(SDL_Init(SDL_INIT_VIDEO), "SDL_Init failed");
 
@@ -71,7 +49,18 @@ void App::run(const char* title, uint32_t w, uint32_t h) {
 
     imagesInFlight.assign(swap.images.size(), VK_NULL_HANDLE);
 
-    SDL_AddEventWatch(eventFilter, this);
+    SDL_AddEventWatch(+[](void* userdata, SDL_Event* event) -> bool {
+        auto* app = static_cast<App*>(userdata);
+        if (event->type == SDL_EVENT_WILL_ENTER_BACKGROUND) {
+            app->state = AppState::Backgrounded;
+            app->background();
+        } else if (event->type == SDL_EVENT_DID_ENTER_FOREGROUND) {
+            app->state = AppState::Running;
+            app->recreateSurfaceAndSwapchain();
+            app->foreground();
+        }
+        return true;
+    }, this);
 
     init();
 
@@ -93,9 +82,7 @@ void App::run(const char* title, uint32_t w, uint32_t h) {
             }
         }
 
-        if (state == AppState::Backgrounded) {
-            continue;
-        }
+        if (state == AppState::Backgrounded) continue;
 
         update(dt);
 
