@@ -1,0 +1,14 @@
+# Build artifacts
+build/
+compile_commands.json
+
+# External references (cloned, not authored)
+external/
+
+# IDE / Editor
+.vs/
+.cache/
+*.user
+*.suo
+*.ncb
+*.sdf
