@@ -11,10 +11,32 @@ static void check(bool ok, const char* msg) {
     }
 }
 
+bool App::eventFilter(void* userdata, SDL_Event* event) {
+    auto* app = static_cast<App*>(userdata);
+
+    switch (event->type) {
+    case SDL_EVENT_WILL_ENTER_BACKGROUND:
+        app->state = AppState::Backgrounded;
+        app->background();
+        break;
+
+    case SDL_EVENT_DID_ENTER_FOREGROUND:
+        app->state = AppState::Running;
+        app->recreateSurfaceAndSwapchain();
+        app->foreground();
+        break;
+
+    default:
+        break;
+    }
+
+    return true;
+}
+
 void App::run(const char* title, uint32_t w, uint32_t h) {
     check(SDL_Init(SDL_INIT_VIDEO), "SDL_Init failed");
 
-    SDL_Window* window = SDL_CreateWindow(title, w, h, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+    window = SDL_CreateWindow(title, w, h, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
     check(window, "SDL_CreateWindow failed");
 
     check(ctx.init(window), "VulkanContext::init failed");
@@ -49,6 +71,8 @@ void App::run(const char* title, uint32_t w, uint32_t h) {
 
     imagesInFlight.assign(swap.images.size(), VK_NULL_HANDLE);
 
+    SDL_AddEventWatch(eventFilter, this);
+
     init();
 
     running = true;
@@ -63,10 +87,14 @@ void App::run(const char* title, uint32_t w, uint32_t h) {
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_EVENT_QUIT) running = false;
             if (event.type == SDL_EVENT_KEY_DOWN && event.key.scancode == SDL_SCANCODE_ESCAPE) running = false;
-            if (event.type == SDL_EVENT_WINDOW_RESIZED) {
+            if (event.type == SDL_EVENT_WINDOW_RESIZED && state == AppState::Running) {
                 recreateSwapchain();
                 resize(swap.extent.width, swap.extent.height);
             }
+        }
+
+        if (state == AppState::Backgrounded) {
+            continue;
         }
 
         update(dt);
@@ -99,6 +127,7 @@ void App::run(const char* title, uint32_t w, uint32_t h) {
     swap.shutdown(ctx.device);
     ctx.shutdown();
 
+    SDL_DestroyWindow(window);
     SDL_Quit();
 }
 
@@ -111,14 +140,52 @@ void App::recreateSwapchain() {
     imagesInFlight.assign(swap.images.size(), VK_NULL_HANDLE);
 }
 
+void App::recreateSurfaceAndSwapchain() {
+    vkDeviceWaitIdle(ctx.device);
+
+    if (ctx.surface != VK_NULL_HANDLE) {
+        vkDestroySurfaceKHR(ctx.instance, ctx.surface, nullptr);
+        ctx.surface = VK_NULL_HANDLE;
+    }
+
+    if (!SDL_Vulkan_CreateSurface(window, ctx.instance, nullptr, &ctx.surface)) {
+        fprintf(stderr, "Surface recreation failed: %s\n", SDL_GetError());
+        return;
+    }
+
+    sync.shutdown(ctx.device);
+    swap.shutdown(ctx.device);
+
+    swap.init(ctx.physicalDevice, ctx.device, ctx.surface,
+              ctx.graphicsQueueFamily, ctx.presentQueueFamily);
+    sync.init(ctx.device, static_cast<uint32_t>(swap.images.size()));
+    imagesInFlight.assign(swap.images.size(), VK_NULL_HANDLE);
+}
+
 bool App::acquireNextFrame(uint32_t& imageIndex) {
     sync.waitForFence(ctx.device);
     sync.resetFence(ctx.device);
 
     VkResult result = swap.acquireNextImage(ctx.device, sync.getImageAvailableSemaphore(), &imageIndex);
-    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+
+    switch (result) {
+    case VK_SUCCESS:
+    case VK_SUBOPTIMAL_KHR:
+        break;
+
+    case VK_ERROR_OUT_OF_DATE_KHR:
         recreateSwapchain();
         resize(swap.extent.width, swap.extent.height);
+        return false;
+
+    case VK_ERROR_SURFACE_LOST_KHR:
+        if (state == AppState::Backgrounded) return false;
+        recreateSurfaceAndSwapchain();
+        return false;
+
+    default:
+        fprintf(stderr, "vkAcquireNextImageKHR failed: %d\n", result);
+        running = false;
         return false;
     }
 
@@ -155,8 +222,24 @@ void App::submitFrame(uint32_t imageIndex) {
     }
 
     result = swap.present(ctx.presentQueue, sync.getRenderFinishedSemaphore(imageIndex), imageIndex);
-    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+
+    switch (result) {
+    case VK_SUCCESS:
+    case VK_SUBOPTIMAL_KHR:
+        break;
+
+    case VK_ERROR_OUT_OF_DATE_KHR:
         recreateSwapchain();
         resize(swap.extent.width, swap.extent.height);
+        break;
+
+    case VK_ERROR_SURFACE_LOST_KHR:
+        if (state != AppState::Backgrounded) {
+            recreateSurfaceAndSwapchain();
+        }
+        break;
+
+    default:
+        break;
     }
 }
