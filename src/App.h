@@ -41,20 +41,9 @@ public:
                                VkShaderStageFlagBits stage,
                                const std::string& filename);
 
-    VulkanContext& getContext() { return ctx; }
-    VulkanSwapchain& getSwapchain() { return swap; }
-    VulkanFrameSync& getFrameSync() { return sync; }
-    VulkanAllocator& getAllocator() { return alloc; }
-    GBuffer& getGBuffer() { return gbuffer; }
-    Uploader& getUploader() { return uploader; }
     AppState getState() const { return state; }
 
-private:
-    void recreateSwapchain();
-    void recreateSurfaceAndSwapchain();
-    bool acquireNextFrame(uint32_t& imageIndex);
-    void submitFrame(uint32_t imageIndex);
-
+protected:
     VulkanContext ctx;
     VulkanSwapchain swap;
     VulkanFrameSync sync;
@@ -71,4 +60,10 @@ private:
     AppState state = AppState::Running;
     bool running = false;
     float lastTime = 0.0f;
+
+private:
+    void recreateSwapchain();
+    void recreateSurfaceAndSwapchain();
+    bool acquireNextFrame(uint32_t& imageIndex);
+    void submitFrame(uint32_t imageIndex);
 };

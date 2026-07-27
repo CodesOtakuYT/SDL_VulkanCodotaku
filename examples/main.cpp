@@ -130,7 +130,7 @@ class CubeApp : public App {
     Mesh quad;
     Mesh triangle;
 
-    Mesh createMesh(VulkanAllocator &alloc, const Vertex *verts, uint32_t vertCount,
+    Mesh createMesh(const Vertex *verts, uint32_t vertCount,
                     const uint32_t *inds, uint32_t indCount) {
         Mesh m;
         m.vertexCount = vertCount;
@@ -165,7 +165,7 @@ class CubeApp : public App {
         return m;
     }
 
-    void destroyMesh(VulkanAllocator &alloc, Mesh &m) {
+    void destroyMesh(Mesh &m) {
         if (m.indexBuffer != VK_NULL_HANDLE) {
             alloc.destroyBuffer(m.indexBuffer, m.indexAllocation);
             m.indexBuffer = VK_NULL_HANDLE;
@@ -177,39 +177,32 @@ class CubeApp : public App {
     }
 
     void init() override {
-        auto &ctx = getContext();
-        auto &swap = getSwapchain();
-        auto &alloc = getAllocator();
-
         msaaSamples = maxSampleCount(ctx.deviceProperties);
         printf("MSAA: %dx\n", msaaSamples);
 
         auto vert = compileShader(vertexShaderGLSL, VK_SHADER_STAGE_VERTEX_BIT, "cube.vert");
         auto frag = compileShader(fragmentShaderGLSL, VK_SHADER_STAGE_FRAGMENT_BIT, "cube.frag");
 
-        // Create all destination buffers first
-        cube = createMesh(alloc, cubeVertices, 36, nullptr, 0);
-        quad = createMesh(alloc, quadVertices, 4, quadIndices, 6);
-        triangle = createMesh(alloc, triangleVertices, 3, nullptr, 0);
+        cube = createMesh(cubeVertices, 36, nullptr, 0);
+        quad = createMesh(quadVertices, 4, quadIndices, 6);
+        triangle = createMesh(triangleVertices, 3, nullptr, 0);
 
-        // Batch all uploads into one staging buffer + one submit
-        auto &up = getUploader();
-        up.add(cubeVertices, sizeof(cubeVertices), cube.vertexBuffer, 0);
-        up.add(quadVertices, sizeof(quadVertices), quad.vertexBuffer, 0);
-        up.add(quadIndices, sizeof(quadIndices), quad.indexBuffer, 0);
-        up.add(triangleVertices, sizeof(triangleVertices), triangle.vertexBuffer, 0);
-        up.upload();
+        uploader.add(cubeVertices, sizeof(cubeVertices), cube.vertexBuffer, 0);
+        uploader.add(quadVertices, sizeof(quadVertices), quad.vertexBuffer, 0);
+        uploader.add(quadIndices, sizeof(quadIndices), quad.indexBuffer, 0);
+        uploader.add(triangleVertices, sizeof(triangleVertices), triangle.vertexBuffer, 0);
+        uploader.upload();
 
         printf("Uploaded: cube VB=%zu, quad VB=%zu IB=%zu, tri VB=%zu\n",
                sizeof(cubeVertices), sizeof(quadVertices), sizeof(quadIndices), sizeof(triangleVertices));
 
-        msaaColorHandle = getGBuffer().add({"MSAA Color", swap.imageFormat, msaaSamples,
+        msaaColorHandle = gbuffer.add({"MSAA Color", swap.imageFormat, msaaSamples,
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT});
 
-        msaaDepthHandle = getGBuffer().add({"MSAA Depth", VK_FORMAT_D32_SFLOAT, msaaSamples,
+        msaaDepthHandle = gbuffer.add({"MSAA Depth", VK_FORMAT_D32_SFLOAT, msaaSamples,
             VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT});
 
-        depthHandle = getGBuffer().add({"Depth", VK_FORMAT_D32_SFLOAT, VK_SAMPLE_COUNT_1_BIT,
+        depthHandle = gbuffer.add({"Depth", VK_FORMAT_D32_SFLOAT, VK_SAMPLE_COUNT_1_BIT,
             VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT});
 
         pipeline = Pipeline::create(ctx.device, {
@@ -242,15 +235,14 @@ class CubeApp : public App {
 
     void recordFrame(const FrameInfo &frame) override {
         VkCommandBuffer cmd = frame.commandBuffer;
-        auto &swap = getSwapchain();
         bool useMsaa = msaaSamples > VK_SAMPLE_COUNT_1_BIT;
 
         sync::discardToGeneral(cmd, swap.images[frame.imageIndex]);
         if (useMsaa) {
-            sync::discardToGeneral(cmd, getGBuffer().getImage(msaaColorHandle));
-            sync::discardDepthToGeneral(cmd, getGBuffer().getImage(msaaDepthHandle));
+            sync::discardToGeneral(cmd, gbuffer.getImage(msaaColorHandle));
+            sync::discardDepthToGeneral(cmd, gbuffer.getImage(msaaDepthHandle));
         }
-        sync::discardDepthToGeneral(cmd, getGBuffer().getImage(depthHandle));
+        sync::discardDepthToGeneral(cmd, gbuffer.getImage(depthHandle));
 
         VkClearValue colorClear = {{{0.01f, 0.01f, 0.033f, 1.0f}}};
         VkRenderingAttachmentInfo colorAttachment{};
@@ -261,7 +253,7 @@ class CubeApp : public App {
         colorAttachment.clearValue = colorClear;
 
         if (useMsaa) {
-            colorAttachment.imageView = getGBuffer().getView(msaaColorHandle);
+            colorAttachment.imageView = gbuffer.getView(msaaColorHandle);
             colorAttachment.resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;
             colorAttachment.resolveImageView = frame.imageView;
             colorAttachment.resolveImageLayout = VK_IMAGE_LAYOUT_GENERAL;
@@ -278,9 +270,9 @@ class CubeApp : public App {
         depthAttachment.clearValue = depthClear;
 
         if (useMsaa) {
-            depthAttachment.imageView = getGBuffer().getView(msaaDepthHandle);
+            depthAttachment.imageView = gbuffer.getView(msaaDepthHandle);
         } else {
-            depthAttachment.imageView = getGBuffer().getView(depthHandle);
+            depthAttachment.imageView = gbuffer.getView(depthHandle);
         }
 
         VkRenderingInfo renderInfo{};
@@ -332,13 +324,12 @@ class CubeApp : public App {
     }
 
     void cleanup() override {
-        auto &ctx = getContext();
         vkDeviceWaitIdle(ctx.device);
 
         pipeline.destroy(ctx.device);
-        destroyMesh(getAllocator(), cube);
-        destroyMesh(getAllocator(), quad);
-        destroyMesh(getAllocator(), triangle);
+        destroyMesh(cube);
+        destroyMesh(quad);
+        destroyMesh(triangle);
     }
 
     void update(float dt) override {
