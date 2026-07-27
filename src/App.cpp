@@ -12,11 +12,11 @@ ShaderModule App::compileShader(const std::string& source,
     return mod;
 }
 
-void App::run(const char* title, uint32_t w, uint32_t h) {
+void App::run(const char* title, glm::uvec2 size) {
     try {
         if (!SDL_Init(SDL_INIT_VIDEO)) throw VkbError("SDL_Init failed");
 
-        window = SDL_CreateWindow(title, w, h, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+        window = SDL_CreateWindow(title, size.x, size.y, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
         if (!window) throw VkbError("SDL_CreateWindow failed");
 
         ctx.init(window);
@@ -24,7 +24,7 @@ void App::run(const char* title, uint32_t w, uint32_t h) {
 
         swap.init(ctx.physicalDevice, ctx.device, ctx.surface,
                   ctx.graphicsQueueFamily, ctx.presentQueueFamily);
-        printf("Swapchain: %ux%u, %zu images\n", swap.extent.width, swap.extent.height, swap.images.size());
+        printf("Swapchain: %ux%u, %zu images\n", swap.extent.x, swap.extent.y, swap.images.size());
 
         sync.init(ctx.device, static_cast<uint32_t>(swap.images.size()));
         alloc.init(ctx.instance, ctx.physicalDevice, ctx.device);
@@ -79,7 +79,7 @@ void App::run(const char* title, uint32_t w, uint32_t h) {
                     SDL_GetWindowSize(window, &w, &h);
                     if (w > 0 && h > 0) {
                         recreateSwapchain();
-                        resize(swap.extent.width, swap.extent.height);
+                        resize(swap.extent);
                     }
                 }
             }
@@ -176,7 +176,7 @@ bool App::acquireNextFrame(uint32_t& imageIndex) {
 
     case VK_ERROR_OUT_OF_DATE_KHR:
         recreateSwapchain();
-        resize(swap.extent.width, swap.extent.height);
+        resize(swap.extent);
         return false;
 
     case VK_ERROR_SURFACE_LOST_KHR:
@@ -225,7 +225,7 @@ void App::submitFrame(uint32_t imageIndex) {
 
     case VK_ERROR_OUT_OF_DATE_KHR:
         recreateSwapchain();
-        resize(swap.extent.width, swap.extent.height);
+        resize(swap.extent);
         break;
 
     case VK_ERROR_SURFACE_LOST_KHR:

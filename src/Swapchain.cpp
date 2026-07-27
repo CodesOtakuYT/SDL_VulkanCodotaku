@@ -7,7 +7,7 @@ void VulkanSwapchain::init(VkPhysicalDevice physicalDevice, VkDevice device, VkS
     chooseSurfaceFormat(physicalDevice, surface);
     choosePresentMode(physicalDevice, surface);
     chooseCompositeAlpha(physicalDevice, surface);
-    chooseExtent(physicalDevice, surface, 0, 0);
+    chooseExtent(physicalDevice, surface, {0, 0});
     createSwapchain(physicalDevice, device, surface, graphicsQueueFamily, presentQueueFamily);
     getSwapchainImages(device);
     createImageViews(device);
@@ -44,7 +44,7 @@ void VulkanSwapchain::recreate(VkPhysicalDevice physicalDevice, VkDevice device,
     chooseSurfaceFormat(physicalDevice, surface);
     choosePresentMode(physicalDevice, surface);
     chooseCompositeAlpha(physicalDevice, surface);
-    chooseExtent(physicalDevice, surface, 0, 0);
+    chooseExtent(physicalDevice, surface, {0, 0});
 
     VkSurfaceCapabilitiesKHR capabilities;
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &capabilities);
@@ -60,7 +60,7 @@ void VulkanSwapchain::recreate(VkPhysicalDevice physicalDevice, VkDevice device,
     createInfo.minImageCount = imageCount;
     createInfo.imageFormat = imageFormat;
     createInfo.imageColorSpace = colorSpace;
-    createInfo.imageExtent = extent;
+    createInfo.imageExtent = {extent.x, extent.y};
     createInfo.imageArrayLayers = 1;
     createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     createInfo.preTransform = capabilities.currentTransform;
@@ -154,19 +154,19 @@ void VulkanSwapchain::chooseCompositeAlpha(VkPhysicalDevice physicalDevice, VkSu
     compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 }
 
-void VulkanSwapchain::chooseExtent(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, uint32_t width, uint32_t height) {
+void VulkanSwapchain::chooseExtent(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, glm::uvec2 minExtent) {
     VkSurfaceCapabilitiesKHR capabilities;
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &capabilities);
 
     if (capabilities.currentExtent.width != UINT32_MAX) {
-        extent = capabilities.currentExtent;
+        extent = {capabilities.currentExtent.width, capabilities.currentExtent.height};
     } else {
-        extent.width = std::clamp(width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
-        extent.height = std::clamp(height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
+        extent.x = std::clamp(minExtent.x, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
+        extent.y = std::clamp(minExtent.y, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
     }
-    if (extent.width == 0 || extent.height == 0) {
-        extent.width = std::max(extent.width, 1u);
-        extent.height = std::max(extent.height, 1u);
+    if (extent.x == 0 || extent.y == 0) {
+        extent.x = std::max(extent.x, 1u);
+        extent.y = std::max(extent.y, 1u);
     }
 }
 
@@ -186,7 +186,7 @@ void VulkanSwapchain::createSwapchain(VkPhysicalDevice physicalDevice, VkDevice 
     createInfo.minImageCount = imageCount;
     createInfo.imageFormat = imageFormat;
     createInfo.imageColorSpace = colorSpace;
-    createInfo.imageExtent = extent;
+    createInfo.imageExtent = {extent.x, extent.y};
     createInfo.imageArrayLayers = 1;
     createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 

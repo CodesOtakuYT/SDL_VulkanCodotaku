@@ -97,7 +97,7 @@ class TriangleApp : public App {
         VkRenderingInfo renderInfo{};
         renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
         renderInfo.renderArea.offset = {0, 0};
-        renderInfo.renderArea.extent = frame.extent;
+        renderInfo.renderArea.extent = {frame.extent.x, frame.extent.y};
         renderInfo.layerCount = 1;
         renderInfo.colorAttachmentCount = 1;
         renderInfo.pColorAttachments = &colorAttachment;
@@ -109,15 +109,15 @@ class TriangleApp : public App {
         VkViewport vp{};
         vp.x = 0.0f;
         vp.y = 0.0f;
-        vp.width = static_cast<float>(frame.extent.width);
-        vp.height = static_cast<float>(frame.extent.height);
+        vp.width = static_cast<float>(frame.extent.x);
+        vp.height = static_cast<float>(frame.extent.y);
         vp.minDepth = 0.0f;
         vp.maxDepth = 1.0f;
         vkCmdSetViewport(cmd, 0, 1, &vp);
 
         VkRect2D scissor{};
         scissor.offset = {0, 0};
-        scissor.extent = frame.extent;
+        scissor.extent = {frame.extent.x, frame.extent.y};
         vkCmdSetScissor(cmd, 0, 1, &scissor);
 
         VkDeviceSize offset = 0;
@@ -137,7 +137,7 @@ class TriangleApp : public App {
         }
     }
 
-    void resize(uint32_t w, uint32_t h) override {
+    void resize(glm::uvec2 size) override {
         vkDeviceWaitIdle(getContext().device);
     }
 };
@@ -145,7 +145,7 @@ class TriangleApp : public App {
 int main(int argc, char *argv[]) {
     try {
         TriangleApp app;
-        app.run("Vulkan Triangle", 1280, 720);
+        app.run("Vulkan Triangle", {1280, 720});
     } catch (const VkbError& e) {
         fprintf(stderr, "FATAL: %s\n", e.what());
         return 1;

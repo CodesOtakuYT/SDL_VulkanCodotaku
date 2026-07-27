@@ -5,13 +5,14 @@
 #include "Allocator.h"
 #include "Shader.h"
 #include <SDL3/SDL.h>
+#include <glm/glm.hpp>
 
 struct FrameInfo {
     uint32_t imageIndex;
     VkImageView imageView;
     VkCommandBuffer commandBuffer;
     uint32_t frameIndex;
-    VkExtent2D extent;
+    glm::uvec2 extent;
 };
 
 enum class AppState {
@@ -27,12 +28,12 @@ public:
     virtual void recordFrame(const FrameInfo& frame) = 0;
     virtual void cleanup() = 0;
 
-    virtual void resize(uint32_t w, uint32_t h) {}
+    virtual void resize(glm::uvec2 size) {}
     virtual void update(float dt) {}
     virtual void background() {}
     virtual void foreground() {}
 
-    void run(const char* title, uint32_t w, uint32_t h);
+    void run(const char* title, glm::uvec2 size);
 
     ShaderModule compileShader(const std::string& source,
                                VkShaderStageFlagBits stage,
