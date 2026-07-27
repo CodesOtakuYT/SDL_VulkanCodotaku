@@ -1,6 +1,7 @@
 #include "App.h"
 #include "Pipeline.h"
 #include "Sync.h"
+#include "Uploader.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -102,6 +103,7 @@ class CubeApp : public App {
     uint32_t msaaColorHandle = 0;
     uint32_t msaaDepthHandle = 0;
     VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
+    Uploader uploader;
     float angle = 0.0f;
 
     void init() override {
@@ -118,18 +120,17 @@ class CubeApp : public App {
         VkBufferCreateInfo bufInfo{};
         bufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         bufInfo.size = sizeof(cubeVertices);
-        bufInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        bufInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
         VmaAllocationCreateInfo vmaInfo{};
         vmaInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        vmaInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        vmaInfo.preferredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
         alloc.createBuffer(bufInfo, vmaInfo, &vertexBuffer, &vertexAllocation);
 
-        void *data;
-        alloc.mapMemory(vertexAllocation, &data);
-        memcpy(data, cubeVertices, sizeof(cubeVertices));
-        alloc.unmapMemory(vertexAllocation);
+        uploader.init(ctx, alloc);
+        uploader.add(cubeVertices, sizeof(cubeVertices), vertexBuffer, 0);
+        uploader.upload();
 
         msaaColorHandle = getGBuffer().add({"MSAA Color", swap.imageFormat, msaaSamples,
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT});
@@ -247,6 +248,7 @@ class CubeApp : public App {
         vkDeviceWaitIdle(ctx.device);
 
         pipeline.destroy(ctx.device);
+        uploader.destroy();
 
         if (vertexBuffer != VK_NULL_HANDLE) {
             getAllocator().destroyBuffer(vertexBuffer, vertexAllocation);

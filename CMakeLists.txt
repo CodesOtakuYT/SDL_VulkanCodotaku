@@ -66,6 +66,7 @@ add_library(vkbootstrap STATIC
     src/Reflection.cpp
     src/Pipeline.cpp
     src/GBuffer.cpp
+    src/Uploader.cpp
     src/App.cpp
 )
 target_include_directories(vkbootstrap PUBLIC src)
