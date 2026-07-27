@@ -4,6 +4,7 @@
 #include "FrameSync.h"
 #include "Allocator.h"
 #include "Shader.h"
+#include "GBuffer.h"
 #include <SDL3/SDL.h>
 #include <glm/glm.hpp>
 
@@ -43,6 +44,7 @@ public:
     VulkanSwapchain& getSwapchain() { return swap; }
     VulkanFrameSync& getFrameSync() { return sync; }
     VulkanAllocator& getAllocator() { return alloc; }
+    GBuffer& getGBuffer() { return gbuffer; }
     AppState getState() const { return state; }
 
 private:
@@ -56,6 +58,7 @@ private:
     VulkanFrameSync sync;
     VulkanAllocator alloc;
     ShaderCompiler compiler;
+    GBuffer gbuffer;
 
     VkCommandPool commandPool = VK_NULL_HANDLE;
     std::vector<VkCommandBuffer> commandBuffers;

@@ -60,6 +60,8 @@ void App::run(const char* title, glm::uvec2 size) {
 
         imagesInFlight.assign(swap.images.size(), VK_NULL_HANDLE);
 
+        gbuffer.init(ctx.device, alloc, swap.extent);
+
         SDL_AddEventWatch(+[](void* userdata, SDL_Event* event) -> bool {
             auto* app = static_cast<App*>(userdata);
             if (event->type == SDL_EVENT_WILL_ENTER_BACKGROUND) {
@@ -129,6 +131,7 @@ void App::run(const char* title, glm::uvec2 size) {
 
         cleanup();
 
+        gbuffer.destroy();
         vkDestroyCommandPool(ctx.device, commandPool, nullptr);
         compiler.shutdown();
         alloc.shutdown();
@@ -155,6 +158,7 @@ void App::recreateSwapchain() {
                   ctx.graphicsQueueFamily, ctx.presentQueueFamily);
     sync.init(ctx.device, static_cast<uint32_t>(swap.images.size()));
     imagesInFlight.assign(swap.images.size(), VK_NULL_HANDLE);
+    gbuffer.resize(swap.extent);
 }
 
 void App::recreateSurfaceAndSwapchain() {
@@ -176,6 +180,7 @@ void App::recreateSurfaceAndSwapchain() {
               ctx.graphicsQueueFamily, ctx.presentQueueFamily);
     sync.init(ctx.device, static_cast<uint32_t>(swap.images.size()));
     imagesInFlight.assign(swap.images.size(), VK_NULL_HANDLE);
+    gbuffer.resize(swap.extent);
 }
 
 bool App::acquireNextFrame(uint32_t& imageIndex) {

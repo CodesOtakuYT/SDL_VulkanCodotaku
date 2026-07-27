@@ -98,19 +98,9 @@ class CubeApp : public App {
     Pipeline pipeline;
     VkBuffer vertexBuffer = VK_NULL_HANDLE;
     VmaAllocation vertexAllocation = VK_NULL_HANDLE;
-
-    VkImage depthImage = VK_NULL_HANDLE;
-    VmaAllocation depthAllocation = VK_NULL_HANDLE;
-    VkImageView depthImageView = VK_NULL_HANDLE;
-
-    VkImage msaaColorImage = VK_NULL_HANDLE;
-    VmaAllocation msaaColorAllocation = VK_NULL_HANDLE;
-    VkImageView msaaColorView = VK_NULL_HANDLE;
-
-    VkImage msaaDepthImage = VK_NULL_HANDLE;
-    VmaAllocation msaaDepthAllocation = VK_NULL_HANDLE;
-    VkImageView msaaDepthView = VK_NULL_HANDLE;
-
+    uint32_t depthHandle = 0;
+    uint32_t msaaColorHandle = 0;
+    uint32_t msaaDepthHandle = 0;
     VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
     float angle = 0.0f;
 
@@ -125,7 +115,6 @@ class CubeApp : public App {
         auto vert = compileShader(vertexShaderGLSL, VK_SHADER_STAGE_VERTEX_BIT, "cube.vert");
         auto frag = compileShader(fragmentShaderGLSL, VK_SHADER_STAGE_FRAGMENT_BIT, "cube.frag");
 
-        // Vertex buffer
         VkBufferCreateInfo bufInfo{};
         bufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         bufInfo.size = sizeof(cubeVertices);
@@ -142,7 +131,14 @@ class CubeApp : public App {
         memcpy(data, cubeVertices, sizeof(cubeVertices));
         alloc.unmapMemory(vertexAllocation);
 
-        createMSAAImages(swap);
+        msaaColorHandle = getGBuffer().add({"MSAA Color", swap.imageFormat, msaaSamples,
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT});
+
+        msaaDepthHandle = getGBuffer().add({"MSAA Depth", VK_FORMAT_D32_SFLOAT, msaaSamples,
+            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT});
+
+        depthHandle = getGBuffer().add({"Depth", VK_FORMAT_D32_SFLOAT, VK_SAMPLE_COUNT_1_BIT,
+            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT});
 
         pipeline = Pipeline::create(ctx.device, {
             .shaders = {
@@ -158,115 +154,18 @@ class CubeApp : public App {
         frag.destroy(ctx.device);
     }
 
-    void createMSAAImages(VulkanSwapchain &swap) {
-        auto &ctx = getContext();
-        auto &alloc = getAllocator();
-
-        VkImageCreateInfo imageInfo{};
-        imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-        imageInfo.imageType = VK_IMAGE_TYPE_2D;
-        imageInfo.extent = {swap.extent.x, swap.extent.y, 1};
-        imageInfo.mipLevels = 1;
-        imageInfo.arrayLayers = 1;
-        imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-        imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        imageInfo.samples = msaaSamples;
-
-        VmaAllocationCreateInfo vmaInfo{};
-        vmaInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        vmaInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
-
-        // MSAA color image
-        if (msaaSamples > VK_SAMPLE_COUNT_1_BIT) {
-            imageInfo.format = swap.imageFormat;
-            imageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
-            vkCheck(vmaCreateImage(alloc.allocator, &imageInfo, &vmaInfo, &msaaColorImage, &msaaColorAllocation, nullptr),
-                    "Failed to create MSAA color image");
-
-            VkImageViewCreateInfo viewInfo{};
-            viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            viewInfo.image = msaaColorImage;
-            viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-            viewInfo.format = swap.imageFormat;
-            viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            viewInfo.subresourceRange.levelCount = 1;
-            viewInfo.subresourceRange.layerCount = 1;
-            vkCheck(vkCreateImageView(ctx.device, &viewInfo, nullptr, &msaaColorView),
-                    "Failed to create MSAA color view");
-        }
-
-        // MSAA depth image
-        if (msaaSamples > VK_SAMPLE_COUNT_1_BIT) {
-            imageInfo.format = VK_FORMAT_D32_SFLOAT;
-            imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
-            vkCheck(vmaCreateImage(alloc.allocator, &imageInfo, &vmaInfo, &msaaDepthImage, &msaaDepthAllocation, nullptr),
-                    "Failed to create MSAA depth image");
-
-            VkImageViewCreateInfo viewInfo{};
-            viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            viewInfo.image = msaaDepthImage;
-            viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-            viewInfo.format = VK_FORMAT_D32_SFLOAT;
-            viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-            viewInfo.subresourceRange.levelCount = 1;
-            viewInfo.subresourceRange.layerCount = 1;
-            vkCheck(vkCreateImageView(ctx.device, &viewInfo, nullptr, &msaaDepthView),
-                    "Failed to create MSAA depth view");
-        }
-
-        // Single-sampled depth (always needed, used as resolve target or primary)
-        {
-            imageInfo.format = VK_FORMAT_D32_SFLOAT;
-            imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-            imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-            vkCheck(vmaCreateImage(alloc.allocator, &imageInfo, &vmaInfo, &depthImage, &depthAllocation, nullptr),
-                    "Failed to create depth image");
-
-            VkImageViewCreateInfo viewInfo{};
-            viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            viewInfo.image = depthImage;
-            viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-            viewInfo.format = VK_FORMAT_D32_SFLOAT;
-            viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-            viewInfo.subresourceRange.levelCount = 1;
-            viewInfo.subresourceRange.layerCount = 1;
-            vkCheck(vkCreateImageView(ctx.device, &viewInfo, nullptr, &depthImageView),
-                    "Failed to create depth view");
-        }
-    }
-
-    void destroyMSAAImages() {
-        auto &ctx = getContext();
-        auto &alloc = getAllocator();
-
-        if (msaaDepthView) { vkDestroyImageView(ctx.device, msaaDepthView, nullptr); msaaDepthView = VK_NULL_HANDLE; }
-        if (msaaDepthImage) { vmaDestroyImage(alloc.allocator, msaaDepthImage, msaaDepthAllocation); msaaDepthImage = VK_NULL_HANDLE; msaaDepthAllocation = VK_NULL_HANDLE; }
-
-        if (msaaColorView) { vkDestroyImageView(ctx.device, msaaColorView, nullptr); msaaColorView = VK_NULL_HANDLE; }
-        if (msaaColorImage) { vmaDestroyImage(alloc.allocator, msaaColorImage, msaaColorAllocation); msaaColorImage = VK_NULL_HANDLE; msaaColorAllocation = VK_NULL_HANDLE; }
-
-        if (depthImageView) { vkDestroyImageView(ctx.device, depthImageView, nullptr); depthImageView = VK_NULL_HANDLE; }
-        if (depthImage) { vmaDestroyImage(alloc.allocator, depthImage, depthAllocation); depthImage = VK_NULL_HANDLE; depthAllocation = VK_NULL_HANDLE; }
-    }
-
     void recordFrame(const FrameInfo &frame) override {
         VkCommandBuffer cmd = frame.commandBuffer;
         auto &swap = getSwapchain();
-        bool msaa = msaaSamples > VK_SAMPLE_COUNT_1_BIT;
+        bool useMsaa = msaaSamples > VK_SAMPLE_COUNT_1_BIT;
 
-        // Transition swapchain image
         sync::discardToGeneral(cmd, swap.images[frame.imageIndex]);
-
-        // Transition MSAA images (first use each frame)
-        if (msaa) {
-            sync::discardToGeneral(cmd, msaaColorImage);
-            sync::discardDepthToGeneral(cmd, msaaDepthImage);
+        if (useMsaa) {
+            sync::discardToGeneral(cmd, getGBuffer().getImage(msaaColorHandle));
+            sync::discardDepthToGeneral(cmd, getGBuffer().getImage(msaaDepthHandle));
         }
+        sync::discardDepthToGeneral(cmd, getGBuffer().getImage(depthHandle));
 
-        // Transition single-sampled depth
-        sync::discardDepthToGeneral(cmd, depthImage);
-
-        // --- Color attachment: MSAA → resolve to swapchain ---
         VkClearValue colorClear = {{{0.01f, 0.01f, 0.033f, 1.0f}}};
         VkRenderingAttachmentInfo colorAttachment{};
         colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
@@ -275,8 +174,8 @@ class CubeApp : public App {
         colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         colorAttachment.clearValue = colorClear;
 
-        if (msaa) {
-            colorAttachment.imageView = msaaColorView;
+        if (useMsaa) {
+            colorAttachment.imageView = getGBuffer().getView(msaaColorHandle);
             colorAttachment.resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;
             colorAttachment.resolveImageView = frame.imageView;
             colorAttachment.resolveImageLayout = VK_IMAGE_LAYOUT_GENERAL;
@@ -284,7 +183,6 @@ class CubeApp : public App {
             colorAttachment.imageView = frame.imageView;
         }
 
-        // --- Depth attachment: MSAA depth (no resolve, we don't need it) ---
         VkClearValue depthClear = {{{1.0f, 0.0f}}};
         VkRenderingAttachmentInfo depthAttachment{};
         depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
@@ -293,10 +191,10 @@ class CubeApp : public App {
         depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         depthAttachment.clearValue = depthClear;
 
-        if (msaa) {
-            depthAttachment.imageView = msaaDepthView;
+        if (useMsaa) {
+            depthAttachment.imageView = getGBuffer().getView(msaaDepthHandle);
         } else {
-            depthAttachment.imageView = depthImageView;
+            depthAttachment.imageView = getGBuffer().getView(depthHandle);
         }
 
         VkRenderingInfo renderInfo{};
@@ -326,7 +224,6 @@ class CubeApp : public App {
         scissor.extent = {frame.extent.x, frame.extent.y};
         vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-        // Push constants — MVP
         float aspect = static_cast<float>(frame.extent.x) / static_cast<float>(frame.extent.y);
         glm::mat4 model = glm::rotate(glm::mat4(1.0f), angle, glm::vec3(1.0f, 1.0f, 0.0f));
         glm::mat4 view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
@@ -349,7 +246,6 @@ class CubeApp : public App {
         auto &ctx = getContext();
         vkDeviceWaitIdle(ctx.device);
 
-        destroyMSAAImages();
         pipeline.destroy(ctx.device);
 
         if (vertexBuffer != VK_NULL_HANDLE) {
@@ -359,11 +255,6 @@ class CubeApp : public App {
 
     void update(float dt) override {
         angle += dt * 1.5f;
-    }
-
-    void resize(glm::uvec2 size) override {
-        destroyMSAAImages();
-        createMSAAImages(getSwapchain());
     }
 };
 
