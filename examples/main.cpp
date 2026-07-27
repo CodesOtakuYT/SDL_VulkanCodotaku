@@ -38,49 +38,64 @@ void main() {
 }
 )";
 
+// 36 vertices, non-indexed
 static Vertex cubeVertices[] = {
-    // Front face
     {{-0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}},
     {{ 0.5f, -0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}},
     {{ 0.5f,  0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}},
     {{-0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}},
     {{ 0.5f,  0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}},
     {{-0.5f,  0.5f,  0.5f}, {1.0f, 1.0f, 0.0f}},
-    // Back face
     {{ 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f}},
     {{-0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 1.0f}},
     {{-0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}},
     {{ 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f}},
     {{-0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}},
     {{ 0.5f,  0.5f, -0.5f}, {0.5f, 0.5f, 0.5f}},
-    // Top face
     {{-0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}},
     {{ 0.5f,  0.5f,  0.5f}, {0.0f, 0.5f, 1.0f}},
     {{ 0.5f,  0.5f, -0.5f}, {0.0f, 1.0f, 1.0f}},
     {{-0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}},
     {{ 0.5f,  0.5f, -0.5f}, {0.0f, 1.0f, 1.0f}},
     {{-0.5f,  0.5f, -0.5f}, {0.0f, 0.5f, 0.5f}},
-    // Bottom face
     {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
     {{ 0.5f, -0.5f, -0.5f}, {0.5f, 0.0f, 0.5f}},
     {{ 0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 1.0f}},
     {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
     {{ 0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 1.0f}},
     {{-0.5f, -0.5f,  0.5f}, {0.5f, 0.0f, 0.5f}},
-    // Right face
     {{ 0.5f, -0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}},
     {{ 0.5f, -0.5f, -0.5f}, {0.0f, 0.5f, 0.5f}},
     {{ 0.5f,  0.5f, -0.5f}, {0.0f, 1.0f, 1.0f}},
     {{ 0.5f, -0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}},
     {{ 0.5f,  0.5f, -0.5f}, {0.0f, 1.0f, 1.0f}},
     {{ 0.5f,  0.5f,  0.5f}, {0.0f, 0.5f, 1.0f}},
-    // Left face
     {{-0.5f, -0.5f, -0.5f}, {1.0f, 1.0f, 0.0f}},
     {{-0.5f, -0.5f,  0.5f}, {1.0f, 0.5f, 0.5f}},
     {{-0.5f,  0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}},
     {{-0.5f, -0.5f, -0.5f}, {1.0f, 1.0f, 0.0f}},
     {{-0.5f,  0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}},
     {{-0.5f,  0.5f, -0.5f}, {1.0f, 0.5f, 1.0f}},
+};
+
+// 4 vertices, indexed with 6 indices — tests index buffer upload
+static Vertex quadVertices[] = {
+    {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 1.0f}},
+    {{ 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 1.0f}},
+    {{ 0.5f,  0.5f, 0.0f}, {1.0f, 1.0f, 0.0f}},
+    {{-0.5f,  0.5f, 0.0f}, {0.5f, 1.0f, 0.5f}},
+};
+
+static uint32_t quadIndices[] = {
+    0, 1, 2,
+    2, 3, 0,
+};
+
+// 3 vertices, non-indexed — odd size (36 bytes) to stress alignment
+static Vertex triangleVertices[] = {
+    {{ 0.0f,  0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+    {{ 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}},
+    {{-0.5f, -0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}},
 };
 
 static VkSampleCountFlagBits maxSampleCount(VkPhysicalDeviceProperties &props) {
@@ -96,13 +111,70 @@ static VkSampleCountFlagBits maxSampleCount(VkPhysicalDeviceProperties &props) {
 
 class CubeApp : public App {
     Pipeline pipeline;
-    VkBuffer vertexBuffer = VK_NULL_HANDLE;
-    VmaAllocation vertexAllocation = VK_NULL_HANDLE;
     uint32_t depthHandle = 0;
     uint32_t msaaColorHandle = 0;
     uint32_t msaaDepthHandle = 0;
     VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
     float angle = 0.0f;
+
+    struct Mesh {
+        VkBuffer vertexBuffer = VK_NULL_HANDLE;
+        VmaAllocation vertexAllocation = VK_NULL_HANDLE;
+        VkBuffer indexBuffer = VK_NULL_HANDLE;
+        VmaAllocation indexAllocation = VK_NULL_HANDLE;
+        uint32_t vertexCount = 0;
+        uint32_t indexCount = 0;
+    };
+
+    Mesh cube;
+    Mesh quad;
+    Mesh triangle;
+
+    Mesh createMesh(VulkanAllocator &alloc, const Vertex *verts, uint32_t vertCount,
+                    const uint32_t *inds, uint32_t indCount) {
+        Mesh m;
+        m.vertexCount = vertCount;
+        m.indexCount = indCount;
+
+        {
+            VkBufferCreateInfo bufInfo{};
+            bufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+            bufInfo.size = vertCount * sizeof(Vertex);
+            bufInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+            VmaAllocationCreateInfo vmaInfo{};
+            vmaInfo.usage = VMA_MEMORY_USAGE_AUTO;
+            vmaInfo.preferredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+            alloc.createBuffer(bufInfo, vmaInfo, &m.vertexBuffer, &m.vertexAllocation);
+        }
+
+        if (inds && indCount > 0) {
+            VkBufferCreateInfo bufInfo{};
+            bufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+            bufInfo.size = indCount * sizeof(uint32_t);
+            bufInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+            VmaAllocationCreateInfo vmaInfo{};
+            vmaInfo.usage = VMA_MEMORY_USAGE_AUTO;
+            vmaInfo.preferredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+            alloc.createBuffer(bufInfo, vmaInfo, &m.indexBuffer, &m.indexAllocation);
+        }
+
+        return m;
+    }
+
+    void destroyMesh(VulkanAllocator &alloc, Mesh &m) {
+        if (m.indexBuffer != VK_NULL_HANDLE) {
+            alloc.destroyBuffer(m.indexBuffer, m.indexAllocation);
+            m.indexBuffer = VK_NULL_HANDLE;
+        }
+        if (m.vertexBuffer != VK_NULL_HANDLE) {
+            alloc.destroyBuffer(m.vertexBuffer, m.vertexAllocation);
+            m.vertexBuffer = VK_NULL_HANDLE;
+        }
+    }
 
     void init() override {
         auto &ctx = getContext();
@@ -115,20 +187,21 @@ class CubeApp : public App {
         auto vert = compileShader(vertexShaderGLSL, VK_SHADER_STAGE_VERTEX_BIT, "cube.vert");
         auto frag = compileShader(fragmentShaderGLSL, VK_SHADER_STAGE_FRAGMENT_BIT, "cube.frag");
 
-        VkBufferCreateInfo bufInfo{};
-        bufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufInfo.size = sizeof(cubeVertices);
-        bufInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        // Create all destination buffers first
+        cube = createMesh(alloc, cubeVertices, 36, nullptr, 0);
+        quad = createMesh(alloc, quadVertices, 4, quadIndices, 6);
+        triangle = createMesh(alloc, triangleVertices, 3, nullptr, 0);
 
-        VmaAllocationCreateInfo vmaInfo{};
-        vmaInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        vmaInfo.preferredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-
-        alloc.createBuffer(bufInfo, vmaInfo, &vertexBuffer, &vertexAllocation);
-
-        auto& up = getUploader();
-        up.add(cubeVertices, sizeof(cubeVertices), vertexBuffer, 0);
+        // Batch all uploads into one staging buffer + one submit
+        auto &up = getUploader();
+        up.add(cubeVertices, sizeof(cubeVertices), cube.vertexBuffer, 0);
+        up.add(quadVertices, sizeof(quadVertices), quad.vertexBuffer, 0);
+        up.add(quadIndices, sizeof(quadIndices), quad.indexBuffer, 0);
+        up.add(triangleVertices, sizeof(triangleVertices), triangle.vertexBuffer, 0);
         up.upload();
+
+        printf("Uploaded: cube VB=%zu, quad VB=%zu IB=%zu, tri VB=%zu\n",
+               sizeof(cubeVertices), sizeof(quadVertices), sizeof(quadIndices), sizeof(triangleVertices));
 
         msaaColorHandle = getGBuffer().add({"MSAA Color", swap.imageFormat, msaaSamples,
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT});
@@ -151,6 +224,20 @@ class CubeApp : public App {
 
         vert.destroy(ctx.device);
         frag.destroy(ctx.device);
+    }
+
+    void drawMesh(VkCommandBuffer cmd, const Mesh &m, const glm::mat4 &mvp) {
+        vkCmdPushConstants(cmd, pipeline.layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &mvp);
+
+        VkDeviceSize offset = 0;
+        vkCmdBindVertexBuffers(cmd, 0, 1, &m.vertexBuffer, &offset);
+
+        if (m.indexCount > 0) {
+            vkCmdBindIndexBuffer(cmd, m.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+            vkCmdDrawIndexed(cmd, m.indexCount, 1, 0, 0, 0);
+        } else {
+            vkCmdDraw(cmd, m.vertexCount, 1, 0, 0);
+        }
     }
 
     void recordFrame(const FrameInfo &frame) override {
@@ -206,7 +293,6 @@ class CubeApp : public App {
         renderInfo.pDepthAttachment = &depthAttachment;
 
         vkCmdBeginRendering(cmd, &renderInfo);
-
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
 
         VkViewport vp{};
@@ -224,20 +310,24 @@ class CubeApp : public App {
         vkCmdSetScissor(cmd, 0, 1, &scissor);
 
         float aspect = static_cast<float>(frame.extent.x) / static_cast<float>(frame.extent.y);
-        glm::mat4 model = glm::rotate(glm::mat4(1.0f), angle, glm::vec3(1.0f, 1.0f, 0.0f));
-        glm::mat4 view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        glm::mat4 proj = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 10.0f);
+        glm::mat4 view = glm::lookAt(glm::vec3(3.0f, 2.0f, 3.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::mat4 proj = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
         proj[1][1] *= -1;
-        glm::mat4 mvp = proj * view * model;
 
-        vkCmdPushConstants(cmd, pipeline.layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &mvp);
+        // Cube: rotating at origin
+        glm::mat4 cubeModel = glm::rotate(glm::mat4(1.0f), angle, glm::vec3(1.0f, 1.0f, 0.0f));
+        drawMesh(cmd, cube, proj * view * cubeModel);
 
-        VkDeviceSize offset = 0;
-        vkCmdBindVertexBuffers(cmd, 0, 1, &vertexBuffer, &offset);
-        vkCmdDraw(cmd, 36, 1, 0, 0);
+        // Quad: stationary, offset to the right
+        glm::mat4 quadModel = glm::translate(glm::mat4(1.0f), glm::vec3(2.0f, 0.0f, 0.0f));
+        drawMesh(cmd, quad, proj * view * quadModel);
+
+        // Triangle: rotating opposite direction, offset to the left
+        glm::mat4 triModel = glm::translate(glm::mat4(1.0f), glm::vec3(-2.0f, 0.0f, 0.0f));
+        triModel = glm::rotate(triModel, -angle * 0.7f, glm::vec3(0.0f, 1.0f, 0.0f));
+        drawMesh(cmd, triangle, proj * view * triModel);
 
         vkCmdEndRendering(cmd);
-
         sync::toPresent(cmd, swap.images[frame.imageIndex]);
     }
 
@@ -246,10 +336,9 @@ class CubeApp : public App {
         vkDeviceWaitIdle(ctx.device);
 
         pipeline.destroy(ctx.device);
-
-        if (vertexBuffer != VK_NULL_HANDLE) {
-            getAllocator().destroyBuffer(vertexBuffer, vertexAllocation);
-        }
+        destroyMesh(getAllocator(), cube);
+        destroyMesh(getAllocator(), quad);
+        destroyMesh(getAllocator(), triangle);
     }
 
     void update(float dt) override {
@@ -260,7 +349,7 @@ class CubeApp : public App {
 int main(int argc, char *argv[]) {
     try {
         CubeApp app;
-        app.run("Vulkan Cube", {1280, 720});
+        app.run("Multi-Mesh Upload Test", {1280, 720});
     } catch (const VkbError &e) {
         fprintf(stderr, "FATAL: %s\n", e.what());
         return 1;
