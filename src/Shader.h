@@ -22,6 +22,7 @@ private:
 struct ShaderModule {
     VkShaderModule module = VK_NULL_HANDLE;
     VkShaderStageFlagBits stage;
+    std::vector<uint32_t> spirv;
 
     bool createFromSPIRV(VkDevice device, const std::vector<uint32_t>& spirv, VkShaderStageFlagBits stage);
     bool createFromGLSL(VkDevice device, const ShaderCompiler& compiler,

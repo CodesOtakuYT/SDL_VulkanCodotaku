@@ -47,6 +47,14 @@ set_target_properties(shaderc PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES "${VULKAN_SDK}/Include"
 )
 
+# --- SPIRV-Reflect (source) ---
+add_library(spirv_reflect STATIC "${VULKAN_SDK}/Source/SPIRV-Reflect/spirv_reflect.c")
+target_include_directories(spirv_reflect PUBLIC
+    "${VULKAN_SDK}/Source/SPIRV-Reflect"
+    "${VULKAN_SDK}/Include"
+)
+target_compile_definitions(spirv_reflect PUBLIC SPIRV_REFLECT_USE_SYSTEM_SPIRV_H)
+
 # --- Library ---
 add_library(vkbootstrap STATIC
     src/Context.cpp
@@ -54,10 +62,11 @@ add_library(vkbootstrap STATIC
     src/FrameSync.cpp
     src/Allocator.cpp
     src/Shader.cpp
+    src/Reflection.cpp
     src/App.cpp
 )
 target_include_directories(vkbootstrap PUBLIC src)
-target_link_libraries(vkbootstrap PUBLIC volk SDL3::SDL3 glm vma shaderc)
+target_link_libraries(vkbootstrap PUBLIC volk SDL3::SDL3 glm vma shaderc spirv_reflect)
 
 # --- Example ---
 add_executable(example examples/main.cpp)

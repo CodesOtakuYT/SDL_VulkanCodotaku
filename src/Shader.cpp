@@ -1,4 +1,5 @@
 #include "Shader.h"
+#include "Reflection.h"
 #include <shaderc/shaderc.hpp>
 #include <fstream>
 #include <sstream>
@@ -76,8 +77,10 @@ std::vector<uint32_t> ShaderCompiler::loadSPIRVFile(const std::string& path) con
     return buffer;
 }
 
-bool ShaderModule::createFromSPIRV(VkDevice device, const std::vector<uint32_t>& spirv, VkShaderStageFlagBits shaderStage) {
-    if (spirv.empty()) return false;
+bool ShaderModule::createFromSPIRV(VkDevice device, const std::vector<uint32_t>& spirvData, VkShaderStageFlagBits shaderStage) {
+    if (spirvData.empty()) return false;
+
+    spirv = spirvData;
 
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -90,14 +93,17 @@ bool ShaderModule::createFromSPIRV(VkDevice device, const std::vector<uint32_t>&
     }
 
     stage = shaderStage;
+
+    reflectAndPrint(spirv, stage);
+
     return true;
 }
 
 bool ShaderModule::createFromGLSL(VkDevice device, const ShaderCompiler& compiler,
                                    const std::string& source, VkShaderStageFlagBits shaderStage,
                                    const std::string& filename) {
-    auto spirv = compiler.compileGLSLToSPIRV(source, shaderStage, filename);
-    return createFromSPIRV(device, spirv, shaderStage);
+    auto spirvData = compiler.compileGLSLToSPIRV(source, shaderStage, filename);
+    return createFromSPIRV(device, spirvData, shaderStage);
 }
 
 void ShaderModule::destroy(VkDevice device) {
