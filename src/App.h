@@ -5,6 +5,7 @@
 #include "Allocator.h"
 #include "Shader.h"
 #include "GBuffer.h"
+#include "Uploader.h"
 #include <SDL3/SDL.h>
 #include <glm/glm.hpp>
 
@@ -45,6 +46,7 @@ public:
     VulkanFrameSync& getFrameSync() { return sync; }
     VulkanAllocator& getAllocator() { return alloc; }
     GBuffer& getGBuffer() { return gbuffer; }
+    Uploader& getUploader() { return uploader; }
     AppState getState() const { return state; }
 
 private:
@@ -59,6 +61,7 @@ private:
     VulkanAllocator alloc;
     ShaderCompiler compiler;
     GBuffer gbuffer;
+    Uploader uploader;
 
     VkCommandPool commandPool = VK_NULL_HANDLE;
     std::vector<VkCommandBuffer> commandBuffers;

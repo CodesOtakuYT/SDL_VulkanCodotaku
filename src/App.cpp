@@ -61,6 +61,7 @@ void App::run(const char* title, glm::uvec2 size) {
         imagesInFlight.assign(swap.images.size(), VK_NULL_HANDLE);
 
         gbuffer.init(ctx.device, alloc, swap.extent);
+        uploader.init(ctx, alloc);
 
         SDL_AddEventWatch(+[](void* userdata, SDL_Event* event) -> bool {
             auto* app = static_cast<App*>(userdata);
@@ -132,6 +133,7 @@ void App::run(const char* title, glm::uvec2 size) {
         cleanup();
 
         gbuffer.destroy();
+        uploader.destroy();
         vkDestroyCommandPool(ctx.device, commandPool, nullptr);
         compiler.shutdown();
         alloc.shutdown();
