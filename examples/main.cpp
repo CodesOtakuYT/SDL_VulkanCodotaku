@@ -98,17 +98,6 @@ static Vertex triangleVertices[] = {
     {{-0.5f, -0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}},
 };
 
-static VkSampleCountFlagBits maxSampleCount(VkPhysicalDeviceProperties &props) {
-    VkSampleCountFlags color = props.limits.framebufferColorSampleCounts;
-    VkSampleCountFlags depth = props.limits.framebufferDepthSampleCounts;
-    VkSampleCountFlags both = color & depth;
-
-    if (both & VK_SAMPLE_COUNT_8_BIT) return VK_SAMPLE_COUNT_8_BIT;
-    if (both & VK_SAMPLE_COUNT_4_BIT) return VK_SAMPLE_COUNT_4_BIT;
-    if (both & VK_SAMPLE_COUNT_2_BIT) return VK_SAMPLE_COUNT_2_BIT;
-    return VK_SAMPLE_COUNT_1_BIT;
-}
-
 class CubeApp : public App {
     Pipeline pipeline;
     uint32_t depthHandle = 0;
@@ -177,7 +166,7 @@ class CubeApp : public App {
     }
 
     void init() override {
-        msaaSamples = maxSampleCount(ctx.deviceProperties);
+        msaaSamples = ctx.maxSampleCount();
         printf("MSAA: %dx\n", msaaSamples);
 
         auto vert = compileShader(vertexShaderGLSL, VK_SHADER_STAGE_VERTEX_BIT, "cube.vert");

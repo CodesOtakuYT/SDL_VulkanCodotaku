@@ -33,6 +33,17 @@ struct VulkanContext {
     void init(SDL_Window* window, bool validation = true);
     void shutdown();
 
+    VkSampleCountFlagBits maxSampleCount() const {
+        VkSampleCountFlags color = deviceProperties.limits.framebufferColorSampleCounts;
+        VkSampleCountFlags depth = deviceProperties.limits.framebufferDepthSampleCounts;
+        VkSampleCountFlags both = color & depth;
+
+        if (both & VK_SAMPLE_COUNT_8_BIT) return VK_SAMPLE_COUNT_8_BIT;
+        if (both & VK_SAMPLE_COUNT_4_BIT) return VK_SAMPLE_COUNT_4_BIT;
+        if (both & VK_SAMPLE_COUNT_2_BIT) return VK_SAMPLE_COUNT_2_BIT;
+        return VK_SAMPLE_COUNT_1_BIT;
+    }
+
 private:
     void createInstance();
     void createSurface();
