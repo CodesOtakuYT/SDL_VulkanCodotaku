@@ -35,6 +35,7 @@ void App::run(const char* title, glm::uvec2 size) {
         poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
         poolInfo.queueFamilyIndex = ctx.graphicsQueueFamily;
         vkCheck(vkCreateCommandPool(ctx.device, &poolInfo, nullptr, &commandPool), "vkCreateCommandPool failed");
+        vkSetObjectName(ctx.device, VK_OBJECT_TYPE_COMMAND_POOL, (uint64_t)commandPool, "MainCommandPool");
 
         commandBuffers.resize(VulkanFrameSync::MAX_FRAMES_IN_FLIGHT);
         VkCommandBufferAllocateInfo allocInfo{};
@@ -44,6 +45,18 @@ void App::run(const char* title, glm::uvec2 size) {
         allocInfo.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
         vkCheck(vkAllocateCommandBuffers(ctx.device, &allocInfo, commandBuffers.data()),
                 "vkAllocateCommandBuffers failed");
+
+        for (uint32_t i = 0; i < static_cast<uint32_t>(commandBuffers.size()); i++) {
+            char name[64];
+            snprintf(name, sizeof(name), "CommandBuffer[%u]", i);
+            vkSetObjectName(ctx.device, VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)commandBuffers[i], name);
+        }
+
+        for (uint32_t i = 0; i < static_cast<uint32_t>(swap.images.size()); i++) {
+            char name[64];
+            snprintf(name, sizeof(name), "SwapchainImage[%u]", i);
+            vkSetObjectName(ctx.device, VK_OBJECT_TYPE_IMAGE, (uint64_t)swap.images[i], name);
+        }
 
         imagesInFlight.assign(swap.images.size(), VK_NULL_HANDLE);
 
@@ -102,7 +115,9 @@ void App::run(const char* title, glm::uvec2 size) {
             beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
             vkBeginCommandBuffer(commandBuffers[frame], &beginInfo);
 
+            vkCmdBeginLabel(commandBuffers[frame], "RecordFrame", 0.46f, 0.56f, 0.96f, 1.0f);
             recordFrame(FrameInfo{imageIndex, swap.imageViews[imageIndex], commandBuffers[frame], frame, swap.extent});
+            vkCmdEndLabel(commandBuffers[frame]);
 
             vkEndCommandBuffer(commandBuffers[frame]);
 

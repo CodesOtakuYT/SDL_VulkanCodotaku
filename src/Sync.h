@@ -76,7 +76,7 @@ inline void imageBarrierDepth(VkCommandBuffer cmd,
 // Discard image contents and transition to GENERAL (first use after creation or UNDEFINED)
 inline void discardToGeneral(VkCommandBuffer cmd, VkImage image) {
     imageBarrier(cmd, image,
-                 VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 0,
+                 VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
                  VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
                  VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 }

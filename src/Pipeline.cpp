@@ -133,15 +133,17 @@ Pipeline Pipeline::create(VkDevice device, const PipelineConfig& config) {
     rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizer.lineWidth = 1.0f;
-    rasterizer.cullMode = VK_CULL_MODE_NONE;
+    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+    rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 
     VkPipelineMultisampleStateCreateInfo multisampling{};
     multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    multisampling.rasterizationSamples = config.samples;
 
     VkPipelineColorBlendAttachmentState blendAttachment{};
     blendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
                                      VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    blendAttachment.blendEnable = VK_FALSE;
 
     VkPipelineColorBlendStateCreateInfo colorBlending{};
     colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
@@ -165,7 +167,7 @@ Pipeline Pipeline::create(VkDevice device, const PipelineConfig& config) {
         depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
         depthStencil.depthTestEnable = VK_TRUE;
         depthStencil.depthWriteEnable = VK_TRUE;
-        depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+        depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
     }
 
     // --- 7. Shader stages ---
@@ -188,7 +190,13 @@ Pipeline Pipeline::create(VkDevice device, const PipelineConfig& config) {
         stages.push_back(stageInfo);
     }
 
-    // --- 8. Create graphics pipeline ---
+    // --- 8. Create pipeline cache ---
+    VkPipelineCacheCreateInfo cacheInfo{};
+    cacheInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+    vkCheck(vkCreatePipelineCache(device, &cacheInfo, nullptr, &pipeline.cache),
+            "vkCreatePipelineCache failed");
+
+    // --- 9. Create graphics pipeline ---
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     pipelineInfo.pNext = &renderingInfo;
@@ -205,7 +213,7 @@ Pipeline Pipeline::create(VkDevice device, const PipelineConfig& config) {
     pipelineInfo.layout = pipeline.layout;
     pipelineInfo.renderPass = VK_NULL_HANDLE;
 
-    vkCheck(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline.handle),
+    vkCheck(vkCreateGraphicsPipelines(device, pipeline.cache, 1, &pipelineInfo, nullptr, &pipeline.handle),
             "vkCreateGraphicsPipelines failed");
 
     // Clean up temporary shader modules
@@ -220,6 +228,10 @@ void Pipeline::destroy(VkDevice device) {
     if (handle != VK_NULL_HANDLE) {
         vkDestroyPipeline(device, handle, nullptr);
         handle = VK_NULL_HANDLE;
+    }
+    if (cache != VK_NULL_HANDLE) {
+        vkDestroyPipelineCache(device, cache, nullptr);
+        cache = VK_NULL_HANDLE;
     }
     if (layout != VK_NULL_HANDLE) {
         vkDestroyPipelineLayout(device, layout, nullptr);

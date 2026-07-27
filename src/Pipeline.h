@@ -54,11 +54,13 @@ struct PipelineConfig {
     std::vector<VkDynamicState> dynamicStates = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
     VkFormat colorAttachmentFormat = VK_FORMAT_UNDEFINED;
     VkFormat depthAttachmentFormat = VK_FORMAT_UNDEFINED;
+    VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
 };
 
 struct Pipeline {
     VkPipeline handle = VK_NULL_HANDLE;
     VkPipelineLayout layout = VK_NULL_HANDLE;
+    VkPipelineCache cache = VK_NULL_HANDLE;
     std::vector<VkDescriptorSetLayout> setLayouts;
     MergedReflection reflection;
 

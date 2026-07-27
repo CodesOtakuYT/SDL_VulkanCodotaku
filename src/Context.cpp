@@ -195,4 +195,6 @@ void VulkanContext::createLogicalDevice() {
 
     vkGetDeviceQueue(device, graphicsQueueFamily, 0, &graphicsQueue);
     vkGetDeviceQueue(device, presentQueueFamily, 0, &presentQueue);
+
+    vkSetObjectName(device, VK_OBJECT_TYPE_DEVICE, (uint64_t)device, "LogicalDevice");
 }
