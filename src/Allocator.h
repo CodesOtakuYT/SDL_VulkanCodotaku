@@ -7,7 +7,7 @@ struct VulkanAllocator {
     VmaAllocator allocator = VK_NULL_HANDLE;
     VkDevice device = VK_NULL_HANDLE;
 
-    bool init(VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device);
+    void init(VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device);
     void shutdown();
 
     VkResult createBuffer(const VkBufferCreateInfo& bufferInfo,

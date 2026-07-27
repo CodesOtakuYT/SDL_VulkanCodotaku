@@ -3,6 +3,7 @@
 #include "Swapchain.h"
 #include "FrameSync.h"
 #include "Allocator.h"
+#include "Shader.h"
 #include <SDL3/SDL.h>
 
 struct FrameInfo {
@@ -33,6 +34,10 @@ public:
 
     void run(const char* title, uint32_t w, uint32_t h);
 
+    ShaderModule compileShader(const std::string& source,
+                               VkShaderStageFlagBits stage,
+                               const std::string& filename);
+
     VulkanContext& getContext() { return ctx; }
     VulkanSwapchain& getSwapchain() { return swap; }
     VulkanFrameSync& getFrameSync() { return sync; }
@@ -49,6 +54,7 @@ private:
     VulkanSwapchain swap;
     VulkanFrameSync sync;
     VulkanAllocator alloc;
+    ShaderCompiler compiler;
 
     VkCommandPool commandPool = VK_NULL_HANDLE;
     std::vector<VkCommandBuffer> commandBuffers;

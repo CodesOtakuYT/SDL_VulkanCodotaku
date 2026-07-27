@@ -1,8 +1,8 @@
 #define VMA_IMPLEMENTATION
 #include "Allocator.h"
-#include <cstdio>
+#include "VkError.h"
 
-bool VulkanAllocator::init(VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice dev) {
+void VulkanAllocator::init(VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice dev) {
     VmaVulkanFunctions vulkanFunctions = {};
     vulkanFunctions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
     vulkanFunctions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
@@ -15,21 +15,14 @@ bool VulkanAllocator::init(VkInstance instance, VkPhysicalDevice physicalDevice,
     createInfo.pVulkanFunctions = &vulkanFunctions;
     createInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
 
-    VkResult result = vmaCreateAllocator(&createInfo, &allocator);
-    if (result == VK_SUCCESS) {
-        this->device = dev;
-    }
-    return result == VK_SUCCESS;
+    vkCheck(vmaCreateAllocator(&createInfo, &allocator), "vmaCreateAllocator failed");
+    this->device = dev;
 }
 
 void VulkanAllocator::shutdown() {
     if (allocator != VK_NULL_HANDLE) {
         VmaTotalStatistics stats;
         vmaCalculateStatistics(allocator, &stats);
-        if (stats.total.statistics.allocationBytes > 0) {
-            fprintf(stderr, "VMA: %llu bytes still allocated at shutdown\n",
-                    stats.total.statistics.allocationBytes);
-        }
         vmaDestroyAllocator(allocator);
         allocator = VK_NULL_HANDLE;
     }

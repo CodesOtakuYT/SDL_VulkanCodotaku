@@ -6,6 +6,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if(MSVC)
     add_compile_options(/EHsc)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
 endif()
 
 # --- Vulkan SDK ---
@@ -39,11 +40,11 @@ set_target_properties(vma PROPERTIES
     INTERFACE_COMPILE_DEFINITIONS "VMA_STATIC_VULKAN_FUNCTIONS=0"
 )
 
-# --- Shaderc (prebuilt) ---
+# --- Shaderc (prebuilt, no debug variant) ---
 add_library(shaderc STATIC IMPORTED)
 set_target_properties(shaderc PROPERTIES
-    IMPORTED_LOCATION       "${VULKAN_SDK}/Lib/shaderc_combined.lib"
-    IMPORTED_LOCATION_DEBUG "${VULKAN_SDK}/Lib/shaderc_combinedd.lib"
+    IMPORTED_LOCATION "${VULKAN_SDK}/Lib/shaderc_combined.lib"
+    IMPORTED_LOCATION_DEBUG "${VULKAN_SDK}/Lib/shaderc_combined.lib"
     INTERFACE_INCLUDE_DIRECTORIES "${VULKAN_SDK}/Include"
 )
 

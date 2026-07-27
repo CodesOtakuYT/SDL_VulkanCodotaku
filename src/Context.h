@@ -30,13 +30,13 @@ struct VulkanContext {
     std::vector<const char*> activeLayers;
     std::vector<const char*> activeExtensions;
 
-    bool init(SDL_Window* window, bool validation = true);
+    void init(SDL_Window* window, bool validation = true);
     void shutdown();
 
 private:
-    bool createInstance();
-    bool createSurface();
-    bool pickPhysicalDevice();
-    bool createLogicalDevice();
+    void createInstance();
+    void createSurface();
+    void pickPhysicalDevice();
+    void createLogicalDevice();
     void queryFeatureSupport();
 };

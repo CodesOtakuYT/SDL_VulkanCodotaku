@@ -1,10 +1,10 @@
 #include "FrameSync.h"
+#include "VkError.h"
 
-bool VulkanFrameSync::init(VkDevice device, uint32_t swapchainImageCount) {
+void VulkanFrameSync::init(VkDevice device, uint32_t swapchainImageCount) {
     imageCount = swapchainImageCount;
-    if (!createSemaphores(device)) return false;
-    if (!createFences(device)) return false;
-    return true;
+    createSemaphores(device);
+    createFences(device);
 }
 
 void VulkanFrameSync::shutdown(VkDevice device) {
@@ -36,7 +36,7 @@ void VulkanFrameSync::advanceFrame() {
     currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
-bool VulkanFrameSync::createSemaphores(VkDevice device) {
+void VulkanFrameSync::createSemaphores(VkDevice device) {
     imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
     renderFinishedSemaphores.resize(imageCount);
 
@@ -44,19 +44,16 @@ bool VulkanFrameSync::createSemaphores(VkDevice device) {
     semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
     for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphores[i]) != VK_SUCCESS) {
-            return false;
-        }
+        vkCheck(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphores[i]),
+                "vkCreateSemaphore (imageAvailable) failed");
     }
     for (uint32_t i = 0; i < imageCount; i++) {
-        if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]) != VK_SUCCESS) {
-            return false;
-        }
+        vkCheck(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]),
+                "vkCreateSemaphore (renderFinished) failed");
     }
-    return true;
 }
 
-bool VulkanFrameSync::createFences(VkDevice device) {
+void VulkanFrameSync::createFences(VkDevice device) {
     inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
 
     VkFenceCreateInfo fenceInfo{};
@@ -64,9 +61,7 @@ bool VulkanFrameSync::createFences(VkDevice device) {
     fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        if (vkCreateFence(device, &fenceInfo, nullptr, &inFlightFences[i]) != VK_SUCCESS) {
-            return false;
-        }
+        vkCheck(vkCreateFence(device, &fenceInfo, nullptr, &inFlightFences[i]),
+                "vkCreateFence failed");
     }
-    return true;
 }

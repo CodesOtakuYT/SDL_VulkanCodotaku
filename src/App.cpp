@@ -1,124 +1,139 @@
 #include "App.h"
+#include "VkError.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 #include <cstdio>
-#include <cstdlib>
 
-static void check(bool ok, const char* msg) {
-    if (!ok) {
-        fprintf(stderr, "FATAL: %s\n", msg);
-        exit(1);
-    }
+ShaderModule App::compileShader(const std::string& source,
+                                VkShaderStageFlagBits stage,
+                                const std::string& filename) {
+    ShaderModule mod;
+    mod.createFromGLSL(ctx.device, compiler, source, stage, filename);
+    return mod;
 }
 
 void App::run(const char* title, uint32_t w, uint32_t h) {
-    check(SDL_Init(SDL_INIT_VIDEO), "SDL_Init failed");
+    try {
+        if (!SDL_Init(SDL_INIT_VIDEO)) throw VkbError("SDL_Init failed");
 
-    window = SDL_CreateWindow(title, w, h, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
-    check(window, "SDL_CreateWindow failed");
+        window = SDL_CreateWindow(title, w, h, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+        if (!window) throw VkbError("SDL_CreateWindow failed");
 
-    check(ctx.init(window), "VulkanContext::init failed");
-    printf("Device: %s\n", ctx.deviceProperties.deviceName);
+        ctx.init(window);
+        printf("Device: %s\n", ctx.deviceProperties.deviceName);
 
-    check(swap.init(ctx.physicalDevice, ctx.device, ctx.surface,
-                     ctx.graphicsQueueFamily, ctx.presentQueueFamily),
-          "VulkanSwapchain::init failed");
-    printf("Swapchain: %ux%u, %zu images\n", swap.extent.width, swap.extent.height, swap.images.size());
+        swap.init(ctx.physicalDevice, ctx.device, ctx.surface,
+                  ctx.graphicsQueueFamily, ctx.presentQueueFamily);
+        printf("Swapchain: %ux%u, %zu images\n", swap.extent.width, swap.extent.height, swap.images.size());
 
-    check(sync.init(ctx.device, static_cast<uint32_t>(swap.images.size())),
-          "VulkanFrameSync::init failed");
+        sync.init(ctx.device, static_cast<uint32_t>(swap.images.size()));
+        alloc.init(ctx.instance, ctx.physicalDevice, ctx.device);
+        compiler.init();
 
-    check(alloc.init(ctx.instance, ctx.physicalDevice, ctx.device),
-          "VulkanAllocator::init failed");
+        VkCommandPoolCreateInfo poolInfo{};
+        poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+        poolInfo.queueFamilyIndex = ctx.graphicsQueueFamily;
+        vkCheck(vkCreateCommandPool(ctx.device, &poolInfo, nullptr, &commandPool), "vkCreateCommandPool failed");
 
-    VkCommandPoolCreateInfo poolInfo{};
-    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    poolInfo.queueFamilyIndex = ctx.graphicsQueueFamily;
-    check(vkCreateCommandPool(ctx.device, &poolInfo, nullptr, &commandPool) == VK_SUCCESS,
-          "CreateCommandPool failed");
+        commandBuffers.resize(VulkanFrameSync::MAX_FRAMES_IN_FLIGHT);
+        VkCommandBufferAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocInfo.commandPool = commandPool;
+        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocInfo.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
+        vkCheck(vkAllocateCommandBuffers(ctx.device, &allocInfo, commandBuffers.data()),
+                "vkAllocateCommandBuffers failed");
 
-    commandBuffers.resize(VulkanFrameSync::MAX_FRAMES_IN_FLIGHT);
-    VkCommandBufferAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocInfo.commandPool = commandPool;
-    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
-    check(vkAllocateCommandBuffers(ctx.device, &allocInfo, commandBuffers.data()) == VK_SUCCESS,
-          "AllocateCommandBuffers failed");
+        imagesInFlight.assign(swap.images.size(), VK_NULL_HANDLE);
 
-    imagesInFlight.assign(swap.images.size(), VK_NULL_HANDLE);
-
-    SDL_AddEventWatch(+[](void* userdata, SDL_Event* event) -> bool {
-        auto* app = static_cast<App*>(userdata);
-        if (event->type == SDL_EVENT_WILL_ENTER_BACKGROUND) {
-            app->state = AppState::Backgrounded;
-            app->background();
-        } else if (event->type == SDL_EVENT_DID_ENTER_FOREGROUND) {
-            app->state = AppState::Running;
-            app->recreateSurfaceAndSwapchain();
-            app->foreground();
-        }
-        return true;
-    }, this);
-
-    init();
-
-    running = true;
-    lastTime = static_cast<float>(SDL_GetPerformanceCounter()) / SDL_GetPerformanceFrequency();
-
-    while (running) {
-        float now = static_cast<float>(SDL_GetPerformanceCounter()) / SDL_GetPerformanceFrequency();
-        float dt = now - lastTime;
-        lastTime = now;
-
-        SDL_Event event;
-        while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_EVENT_QUIT) running = false;
-            if (event.type == SDL_EVENT_KEY_DOWN && event.key.scancode == SDL_SCANCODE_ESCAPE) running = false;
-            if (event.type == SDL_EVENT_WINDOW_RESIZED && state == AppState::Running) {
-                recreateSwapchain();
-                resize(swap.extent.width, swap.extent.height);
+        SDL_AddEventWatch(+[](void* userdata, SDL_Event* event) -> bool {
+            auto* app = static_cast<App*>(userdata);
+            if (event->type == SDL_EVENT_WILL_ENTER_BACKGROUND) {
+                app->state = AppState::Backgrounded;
+                app->background();
+            } else if (event->type == SDL_EVENT_DID_ENTER_FOREGROUND) {
+                app->state = AppState::Running;
+                app->recreateSurfaceAndSwapchain();
+                app->foreground();
             }
+            return true;
+        }, this);
+
+        init();
+
+        running = true;
+        lastTime = static_cast<float>(SDL_GetPerformanceCounter()) / SDL_GetPerformanceFrequency();
+
+        while (running) {
+            float now = static_cast<float>(SDL_GetPerformanceCounter()) / SDL_GetPerformanceFrequency();
+            float dt = now - lastTime;
+            lastTime = now;
+
+            SDL_Event event;
+            while (SDL_PollEvent(&event)) {
+                if (event.type == SDL_EVENT_QUIT) running = false;
+                if (event.type == SDL_EVENT_KEY_DOWN && event.key.scancode == SDL_SCANCODE_ESCAPE) running = false;
+                if (event.type == SDL_EVENT_WINDOW_RESIZED && state == AppState::Running) {
+                    int w = 0, h = 0;
+                    SDL_GetWindowSize(window, &w, &h);
+                    if (w > 0 && h > 0) {
+                        recreateSwapchain();
+                        resize(swap.extent.width, swap.extent.height);
+                    }
+                }
+            }
+
+            if (state == AppState::Backgrounded) continue;
+
+            int w = 0, h = 0;
+            SDL_GetWindowSize(window, &w, &h);
+            if (w <= 0 || h <= 0) continue;
+
+            update(dt);
+
+            uint32_t imageIndex;
+            if (!acquireNextFrame(imageIndex)) continue;
+
+            uint32_t frame = sync.currentFrame;
+            vkResetCommandBuffer(commandBuffers[frame], 0);
+
+            VkCommandBufferBeginInfo beginInfo{};
+            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            vkBeginCommandBuffer(commandBuffers[frame], &beginInfo);
+
+            recordFrame(FrameInfo{imageIndex, swap.imageViews[imageIndex], commandBuffers[frame], frame, swap.extent});
+
+            vkEndCommandBuffer(commandBuffers[frame]);
+
+            submitFrame(imageIndex);
+            sync.advanceFrame();
         }
 
-        if (state == AppState::Backgrounded) continue;
+        vkDeviceWaitIdle(ctx.device);
 
-        update(dt);
+        cleanup();
 
-        uint32_t imageIndex;
-        if (!acquireNextFrame(imageIndex)) continue;
+        vkDestroyCommandPool(ctx.device, commandPool, nullptr);
+        compiler.shutdown();
+        alloc.shutdown();
+        sync.shutdown(ctx.device);
+        swap.shutdown(ctx.device);
+        ctx.shutdown();
 
-        uint32_t frame = sync.currentFrame;
-        vkResetCommandBuffer(commandBuffers[frame], 0);
-
-        VkCommandBufferBeginInfo beginInfo{};
-        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        vkBeginCommandBuffer(commandBuffers[frame], &beginInfo);
-
-        recordFrame(FrameInfo{imageIndex, swap.imageViews[imageIndex], commandBuffers[frame], frame, swap.extent});
-
-        vkEndCommandBuffer(commandBuffers[frame]);
-
-        submitFrame(imageIndex);
-        sync.advanceFrame();
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+    } catch (const VkbError& e) {
+        fprintf(stderr, "FATAL: %s\n", e.what());
+        throw;
     }
-
-    vkDeviceWaitIdle(ctx.device);
-
-    cleanup();
-
-    vkDestroyCommandPool(ctx.device, commandPool, nullptr);
-    alloc.shutdown();
-    sync.shutdown(ctx.device);
-    swap.shutdown(ctx.device);
-    ctx.shutdown();
-
-    SDL_DestroyWindow(window);
-    SDL_Quit();
 }
 
 void App::recreateSwapchain() {
+    int w = 0, h = 0;
+    SDL_GetWindowSize(window, &w, &h);
+    if (w <= 0 || h <= 0) return;
+
     vkDeviceWaitIdle(ctx.device);
     sync.shutdown(ctx.device);
     swap.recreate(ctx.physicalDevice, ctx.device, ctx.surface,
@@ -136,8 +151,7 @@ void App::recreateSurfaceAndSwapchain() {
     }
 
     if (!SDL_Vulkan_CreateSurface(window, ctx.instance, nullptr, &ctx.surface)) {
-        fprintf(stderr, "Surface recreation failed: %s\n", SDL_GetError());
-        return;
+        throw VkbError("Surface recreation failed");
     }
 
     sync.shutdown(ctx.device);
@@ -171,9 +185,7 @@ bool App::acquireNextFrame(uint32_t& imageIndex) {
         return false;
 
     default:
-        fprintf(stderr, "vkAcquireNextImageKHR failed: %d\n", result);
-        running = false;
-        return false;
+        vkCheck(result, "vkAcquireNextImageKHR failed");
     }
 
     if (imagesInFlight[imageIndex] != VK_NULL_HANDLE) {
@@ -201,14 +213,10 @@ void App::submitFrame(uint32_t imageIndex) {
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = signalSemaphores;
 
-    VkResult result = vkQueueSubmit(ctx.graphicsQueue, 1, &submitInfo, sync.getInFlightFence());
-    if (result != VK_SUCCESS) {
-        fprintf(stderr, "vkQueueSubmit failed: %d\n", result);
-        running = false;
-        return;
-    }
+    vkCheck(vkQueueSubmit(ctx.graphicsQueue, 1, &submitInfo, sync.getInFlightFence()),
+            "vkQueueSubmit failed");
 
-    result = swap.present(ctx.presentQueue, sync.getRenderFinishedSemaphore(imageIndex), imageIndex);
+    VkResult result = swap.present(ctx.presentQueue, sync.getRenderFinishedSemaphore(imageIndex), imageIndex);
 
     switch (result) {
     case VK_SUCCESS:

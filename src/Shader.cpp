@@ -1,10 +1,9 @@
 #include "Shader.h"
 #include "Reflection.h"
+#include "VkError.h"
 #include <shaderc/shaderc.hpp>
 #include <fstream>
 #include <sstream>
-#include <cstdio>
-#include <cstdlib>
 
 struct ShaderCompiler::Impl {
     shaderc::Compiler compiler;
@@ -16,15 +15,13 @@ struct ShaderCompiler::Impl {
     }
 };
 
-bool ShaderCompiler::init() {
+void ShaderCompiler::init() {
     impl = new Impl();
     if (!impl->compiler.IsValid()) {
-        fprintf(stderr, "shaderc::Compiler initialization failed\n");
         delete impl;
         impl = nullptr;
-        return false;
+        throw VkbError("shaderc::Compiler initialization failed");
     }
-    return true;
 }
 
 void ShaderCompiler::shutdown() {
@@ -35,7 +32,7 @@ void ShaderCompiler::shutdown() {
 std::vector<uint32_t> ShaderCompiler::compileGLSLToSPIRV(const std::string& source,
                                                           VkShaderStageFlagBits stage,
                                                           const std::string& filename) const {
-    if (!impl) return {};
+    if (!impl) throw VkbError("ShaderCompiler not initialized");
 
     shaderc_shader_kind kind;
     switch (stage) {
@@ -43,16 +40,13 @@ std::vector<uint32_t> ShaderCompiler::compileGLSLToSPIRV(const std::string& sour
         case VK_SHADER_STAGE_FRAGMENT_BIT: kind = shaderc_fragment_shader; break;
         case VK_SHADER_STAGE_COMPUTE_BIT:  kind = shaderc_compute_shader; break;
         default:
-            fprintf(stderr, "Unsupported shader stage: %d\n", stage);
-            return {};
+            throw VkbError("Unsupported shader stage");
     }
 
     auto result = impl->compiler.CompileGlslToSpv(source, kind, filename.c_str(), impl->options);
 
     if (result.GetCompilationStatus() != shaderc_compilation_status_success) {
-        fprintf(stderr, "Shader compilation failed (%s):\n%s\n",
-                filename.c_str(), result.GetErrorMessage().c_str());
-        return {};
+        throw VkbError(result.GetErrorMessage().c_str());
     }
 
     return {result.cbegin(), result.cend()};
@@ -61,14 +55,12 @@ std::vector<uint32_t> ShaderCompiler::compileGLSLToSPIRV(const std::string& sour
 std::vector<uint32_t> ShaderCompiler::loadSPIRVFile(const std::string& path) const {
     std::ifstream file(path, std::ios::ate | std::ios::binary);
     if (!file.is_open()) {
-        fprintf(stderr, "Failed to open SPIR-V file: %s\n", path.c_str());
-        return {};
+        throw VkbError("Failed to open SPIR-V file");
     }
 
     size_t fileSize = static_cast<size_t>(file.tellg());
     if (fileSize == 0 || fileSize % 4 != 0) {
-        fprintf(stderr, "Invalid SPIR-V file size: %s\n", path.c_str());
-        return {};
+        throw VkbError("Invalid SPIR-V file size");
     }
 
     std::vector<uint32_t> buffer(fileSize / sizeof(uint32_t));
@@ -77,8 +69,8 @@ std::vector<uint32_t> ShaderCompiler::loadSPIRVFile(const std::string& path) con
     return buffer;
 }
 
-bool ShaderModule::createFromSPIRV(VkDevice device, const std::vector<uint32_t>& spirvData, VkShaderStageFlagBits shaderStage) {
-    if (spirvData.empty()) return false;
+void ShaderModule::createFromSPIRV(VkDevice device, const std::vector<uint32_t>& spirvData, VkShaderStageFlagBits shaderStage) {
+    if (spirvData.empty()) throw VkbError("SPIR-V data is empty");
 
     spirv = spirvData;
 
@@ -87,23 +79,17 @@ bool ShaderModule::createFromSPIRV(VkDevice device, const std::vector<uint32_t>&
     createInfo.codeSize = spirv.size() * sizeof(uint32_t);
     createInfo.pCode = spirv.data();
 
-    if (vkCreateShaderModule(device, &createInfo, nullptr, &module) != VK_SUCCESS) {
-        fprintf(stderr, "Failed to create shader module\n");
-        return false;
-    }
-
+    vkCheck(vkCreateShaderModule(device, &createInfo, nullptr, &module), "vkCreateShaderModule failed");
     stage = shaderStage;
 
     reflectAndPrint(spirv, stage);
-
-    return true;
 }
 
-bool ShaderModule::createFromGLSL(VkDevice device, const ShaderCompiler& compiler,
+void ShaderModule::createFromGLSL(VkDevice device, const ShaderCompiler& compiler,
                                    const std::string& source, VkShaderStageFlagBits shaderStage,
                                    const std::string& filename) {
     auto spirvData = compiler.compileGLSLToSPIRV(source, shaderStage, filename);
-    return createFromSPIRV(device, spirvData, shaderStage);
+    createFromSPIRV(device, spirvData, shaderStage);
 }
 
 void ShaderModule::destroy(VkDevice device) {

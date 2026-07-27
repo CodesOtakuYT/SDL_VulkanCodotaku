@@ -1,18 +1,18 @@
 #include "Context.h"
+#include "VkError.h"
 #include <set>
 #include <cstring>
 #include <algorithm>
 
-bool VulkanContext::init(SDL_Window* window, bool validation) {
+void VulkanContext::init(SDL_Window* window, bool validation) {
     this->window = window;
     this->enableValidation = validation;
-    if (volkInitialize() != VK_SUCCESS) return false;
-    if (!createInstance()) return false;
-    if (!createSurface()) return false;
-    if (!pickPhysicalDevice()) return false;
+    vkCheck(volkInitialize(), "volkInitialize failed");
+    createInstance();
+    createSurface();
+    pickPhysicalDevice();
     queryFeatureSupport();
-    if (!createLogicalDevice()) return false;
-    return true;
+    createLogicalDevice();
 }
 
 void VulkanContext::shutdown() {
@@ -30,7 +30,7 @@ void VulkanContext::shutdown() {
     }
 }
 
-bool VulkanContext::createInstance() {
+void VulkanContext::createInstance() {
     if (enableValidation) {
         uint32_t layerCount = 0;
         vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
@@ -71,25 +71,20 @@ bool VulkanContext::createInstance() {
     createInfo.enabledLayerCount = static_cast<uint32_t>(activeLayers.size());
     createInfo.ppEnabledLayerNames = activeLayers.data();
 
-    if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS) {
-        return false;
-    }
-
+    vkCheck(vkCreateInstance(&createInfo, nullptr, &instance), "vkCreateInstance failed");
     volkLoadInstance(instance);
-    return true;
 }
 
-bool VulkanContext::createSurface() {
+void VulkanContext::createSurface() {
     if (!SDL_Vulkan_CreateSurface(window, instance, nullptr, &surface)) {
-        return false;
+        throw VkbError("SDL_Vulkan_CreateSurface failed");
     }
-    return true;
 }
 
-bool VulkanContext::pickPhysicalDevice() {
+void VulkanContext::pickPhysicalDevice() {
     uint32_t deviceCount = 0;
     vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
-    if (deviceCount == 0) return false;
+    if (deviceCount == 0) throw VkbError("No Vulkan physical devices found");
 
     std::vector<VkPhysicalDevice> devices(deviceCount);
     vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
@@ -140,10 +135,10 @@ bool VulkanContext::pickPhysicalDevice() {
 
             vkGetPhysicalDeviceFeatures2(physicalDevice, &deviceFeatures2);
 
-            return true;
+            return;
         }
     }
-    return false;
+    throw VkbError("No suitable GPU found");
 }
 
 void VulkanContext::queryFeatureSupport() {
@@ -171,7 +166,7 @@ void VulkanContext::queryFeatureSupport() {
     unifiedImageLayoutsFeatures.unifiedImageLayouts = VK_TRUE;
 }
 
-bool VulkanContext::createLogicalDevice() {
+void VulkanContext::createLogicalDevice() {
     std::set<uint32_t> uniqueQueueFamilies = {graphicsQueueFamily, presentQueueFamily};
 
     float queuePriority = 1.0f;
@@ -195,14 +190,9 @@ bool VulkanContext::createLogicalDevice() {
     createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
     createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
-    if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS) {
-        return false;
-    }
-
+    vkCheck(vkCreateDevice(physicalDevice, &createInfo, nullptr, &device), "vkCreateDevice failed");
     volkLoadDevice(device);
 
     vkGetDeviceQueue(device, graphicsQueueFamily, 0, &graphicsQueue);
     vkGetDeviceQueue(device, presentQueueFamily, 0, &presentQueue);
-
-    return true;
 }

@@ -13,7 +13,7 @@ struct VulkanFrameSync {
     uint32_t currentFrame = 0;
     uint32_t imageCount = 0;
 
-    bool init(VkDevice device, uint32_t swapchainImageCount);
+    void init(VkDevice device, uint32_t swapchainImageCount);
     void shutdown(VkDevice device);
 
     void waitForFence(VkDevice device);
@@ -25,6 +25,6 @@ struct VulkanFrameSync {
     VkFence getInFlightFence() const { return inFlightFences[currentFrame]; }
 
 private:
-    bool createSemaphores(VkDevice device);
-    bool createFences(VkDevice device);
+    void createSemaphores(VkDevice device);
+    void createFences(VkDevice device);
 };

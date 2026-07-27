@@ -1,8 +1,6 @@
 #include "App.h"
 #include "Pipeline.h"
-#include "Shader.h"
 #include "Sync.h"
-#include <cstdio>
 #include <glm/glm.hpp>
 
 struct Vertex {
@@ -37,7 +35,6 @@ void main() {
 
 class TriangleApp : public App {
     Pipeline pipeline;
-    ShaderCompiler compiler;
     VkBuffer vertexBuffer = VK_NULL_HANDLE;
     VmaAllocation vertexAllocation = VK_NULL_HANDLE;
 
@@ -46,22 +43,9 @@ class TriangleApp : public App {
         auto &swap = getSwapchain();
         auto &alloc = getAllocator();
 
-        compiler.init();
+        auto vert = compileShader(vertexShaderGLSL, VK_SHADER_STAGE_VERTEX_BIT, "triangle.vert");
+        auto frag = compileShader(fragmentShaderGLSL, VK_SHADER_STAGE_FRAGMENT_BIT, "triangle.frag");
 
-        // Compile shaders
-        ShaderModule vert, frag;
-        if (!vert.createFromGLSL(ctx.device, compiler, vertexShaderGLSL,
-                                 VK_SHADER_STAGE_VERTEX_BIT, "triangle.vert")) {
-            fprintf(stderr, "Failed to compile vertex shader\n");
-            return;
-        }
-        if (!frag.createFromGLSL(ctx.device, compiler, fragmentShaderGLSL,
-                                 VK_SHADER_STAGE_FRAGMENT_BIT, "triangle.frag")) {
-            fprintf(stderr, "Failed to compile fragment shader\n");
-            return;
-        }
-
-        // Create vertex buffer via VMA
         Vertex vertices[] = {
             {{0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
             {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
@@ -84,7 +68,6 @@ class TriangleApp : public App {
         memcpy(data, vertices, sizeof(vertices));
         alloc.unmapMemory(vertexAllocation);
 
-        // Create pipeline — layout auto-generated from reflection
         pipeline = Pipeline::create(ctx.device, {
             .shaders = {
                 {vert.spirv, VK_SHADER_STAGE_VERTEX_BIT, "triangle.vert"},
@@ -147,18 +130,11 @@ class TriangleApp : public App {
     }
 
     void cleanup() override {
-        auto &ctx = getContext();
-        vkDeviceWaitIdle(ctx.device);
-
-        pipeline.destroy(ctx.device);
+        pipeline.destroy(getContext().device);
 
         if (vertexBuffer != VK_NULL_HANDLE) {
             getAllocator().destroyBuffer(vertexBuffer, vertexAllocation);
-            vertexBuffer = VK_NULL_HANDLE;
-            vertexAllocation = VK_NULL_HANDLE;
         }
-
-        compiler.shutdown();
     }
 
     void resize(uint32_t w, uint32_t h) override {
@@ -167,7 +143,12 @@ class TriangleApp : public App {
 };
 
 int main(int argc, char *argv[]) {
-    TriangleApp app;
-    app.run("Vulkan Triangle", 1280, 720);
+    try {
+        TriangleApp app;
+        app.run("Vulkan Triangle", 1280, 720);
+    } catch (const VkbError& e) {
+        fprintf(stderr, "FATAL: %s\n", e.what());
+        return 1;
+    }
     return 0;
 }

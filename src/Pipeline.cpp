@@ -1,6 +1,6 @@
 #include "Pipeline.h"
+#include "VkError.h"
 #include <algorithm>
-#include <cstdio>
 
 Pipeline Pipeline::create(VkDevice device, const PipelineConfig& config) {
     Pipeline pipeline;
@@ -47,9 +47,8 @@ Pipeline Pipeline::create(VkDevice device, const PipelineConfig& config) {
         layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
         layoutInfo.pBindings = bindings.data();
 
-        if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &pipeline.setLayouts[s]) != VK_SUCCESS) {
-            fprintf(stderr, "Failed to create descriptor set layout for set %u\n", s);
-        }
+        vkCheck(vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &pipeline.setLayouts[s]),
+                "vkCreateDescriptorSetLayout failed");
     }
 
     // --- 4. Create VkPipelineLayout ---
@@ -75,10 +74,8 @@ Pipeline Pipeline::create(VkDevice device, const PipelineConfig& config) {
     pipelineLayoutInfo.pushConstantRangeCount = static_cast<uint32_t>(pcRanges.size());
     pipelineLayoutInfo.pPushConstantRanges = pcRanges.data();
 
-    if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipeline.layout) != VK_SUCCESS) {
-        fprintf(stderr, "Failed to create pipeline layout\n");
-        return pipeline;
-    }
+    vkCheck(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipeline.layout),
+            "vkCreatePipelineLayout failed");
 
     // --- 5. Build vertex input state from reflection ---
     auto& vertInputs = pipeline.reflection.vertexInputs;
@@ -174,17 +171,14 @@ Pipeline Pipeline::create(VkDevice device, const PipelineConfig& config) {
         stageInfo.stage = s.stage;
         stageInfo.pName = "main";
 
-        // Create temporary shader module
         VkShaderModuleCreateInfo moduleInfo{};
         moduleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
         moduleInfo.codeSize = s.spirv.size() * sizeof(uint32_t);
         moduleInfo.pCode = s.spirv.data();
 
         VkShaderModule shaderModule;
-        if (vkCreateShaderModule(device, &moduleInfo, nullptr, &shaderModule) != VK_SUCCESS) {
-            fprintf(stderr, "Failed to create shader module for %s\n", s.filename.c_str());
-            continue;
-        }
+        vkCheck(vkCreateShaderModule(device, &moduleInfo, nullptr, &shaderModule),
+                "vkCreateShaderModule (pipeline stage) failed");
         stageInfo.module = shaderModule;
         stages.push_back(stageInfo);
     }
@@ -205,9 +199,8 @@ Pipeline Pipeline::create(VkDevice device, const PipelineConfig& config) {
     pipelineInfo.layout = pipeline.layout;
     pipelineInfo.renderPass = VK_NULL_HANDLE;
 
-    if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline.handle) != VK_SUCCESS) {
-        fprintf(stderr, "Failed to create graphics pipeline\n");
-    }
+    vkCheck(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline.handle),
+            "vkCreateGraphicsPipelines failed");
 
     // Clean up temporary shader modules
     for (auto& s : stages) {

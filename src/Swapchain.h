@@ -1,7 +1,6 @@
 #pragma once
 #include <volk.h>
 #include <vector>
-#include <functional>
 
 struct VulkanSwapchain {
     VkSwapchainKHR swapchain = VK_NULL_HANDLE;
@@ -14,7 +13,7 @@ struct VulkanSwapchain {
     std::vector<VkImageView> imageViews;
     std::vector<VkFramebuffer> framebuffers;
 
-    bool init(VkPhysicalDevice physicalDevice, VkDevice device, VkSurfaceKHR surface,
+    void init(VkPhysicalDevice physicalDevice, VkDevice device, VkSurfaceKHR surface,
               uint32_t graphicsQueueFamily, uint32_t presentQueueFamily);
     void shutdown(VkDevice device);
 
@@ -25,12 +24,12 @@ struct VulkanSwapchain {
     VkResult present(VkQueue presentQueue, VkSemaphore renderFinishedSemaphore, uint32_t imageIndex);
 
 private:
-    bool chooseSurfaceFormat(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface);
-    bool choosePresentMode(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface);
-    bool chooseCompositeAlpha(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface);
-    bool chooseExtent(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, uint32_t width, uint32_t height);
-    bool createSwapchain(VkPhysicalDevice physicalDevice, VkDevice device, VkSurfaceKHR surface,
+    void chooseSurfaceFormat(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface);
+    void choosePresentMode(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface);
+    void chooseCompositeAlpha(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface);
+    void chooseExtent(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, uint32_t width, uint32_t height);
+    void createSwapchain(VkPhysicalDevice physicalDevice, VkDevice device, VkSurfaceKHR surface,
                          uint32_t graphicsQueueFamily, uint32_t presentQueueFamily);
-    bool getSwapchainImages(VkDevice device);
-    bool createImageViews(VkDevice device);
+    void getSwapchainImages(VkDevice device);
+    void createImageViews(VkDevice device);
 };

@@ -1,5 +1,6 @@
 #pragma once
 #include "Reflection.h"
+#include "VkError.h"
 #include <volk.h>
 #include <vector>
 #include <string>
@@ -7,8 +8,7 @@
 inline VkShaderStageFlagBits inferShaderStage(const std::string& filename) {
     size_t dot = filename.rfind('.');
     if (dot == std::string::npos) {
-        fprintf(stderr, "Cannot infer shader stage from filename (no extension): %s\n", filename.c_str());
-        return VK_SHADER_STAGE_VERTEX_BIT;
+        throw VkbError("Cannot infer shader stage from filename (no extension): " + filename);
     }
     std::string ext = filename.substr(dot);
     if (ext == ".vert") return VK_SHADER_STAGE_VERTEX_BIT;
@@ -17,8 +17,7 @@ inline VkShaderStageFlagBits inferShaderStage(const std::string& filename) {
     if (ext == ".geom") return VK_SHADER_STAGE_GEOMETRY_BIT;
     if (ext == ".tesc") return VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
     if (ext == ".tese") return VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
-    fprintf(stderr, "Unknown shader extension '%s' for file: %s\n", ext.c_str(), filename.c_str());
-    return VK_SHADER_STAGE_VERTEX_BIT;
+    throw VkbError("Unknown shader extension '" + ext + "' for file: " + filename);
 }
 
 inline uint32_t formatSize(VkFormat format) {
