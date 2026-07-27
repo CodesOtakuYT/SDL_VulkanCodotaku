@@ -1,6 +1,7 @@
 #include "App.h"
 #include "Pipeline.h"
 #include "Sync.h"
+#include "Resource.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -107,10 +108,8 @@ class CubeApp : public App {
     float angle = 0.0f;
 
     struct Mesh {
-        VkBuffer vertexBuffer = VK_NULL_HANDLE;
-        VmaAllocation vertexAllocation = VK_NULL_HANDLE;
-        VkBuffer indexBuffer = VK_NULL_HANDLE;
-        VmaAllocation indexAllocation = VK_NULL_HANDLE;
+        Buffer vertexBuffer;
+        Buffer indexBuffer;
         uint32_t vertexCount = 0;
         uint32_t indexCount = 0;
     };
@@ -135,7 +134,7 @@ class CubeApp : public App {
             vmaInfo.usage = VMA_MEMORY_USAGE_AUTO;
             vmaInfo.preferredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-            alloc.createBuffer(bufInfo, vmaInfo, &m.vertexBuffer, &m.vertexAllocation);
+            m.vertexBuffer = Buffer::create(alloc, bufInfo, vmaInfo);
         }
 
         if (inds && indCount > 0) {
@@ -148,21 +147,10 @@ class CubeApp : public App {
             vmaInfo.usage = VMA_MEMORY_USAGE_AUTO;
             vmaInfo.preferredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-            alloc.createBuffer(bufInfo, vmaInfo, &m.indexBuffer, &m.indexAllocation);
+            m.indexBuffer = Buffer::create(alloc, bufInfo, vmaInfo);
         }
 
         return m;
-    }
-
-    void destroyMesh(Mesh &m) {
-        if (m.indexBuffer != VK_NULL_HANDLE) {
-            alloc.destroyBuffer(m.indexBuffer, m.indexAllocation);
-            m.indexBuffer = VK_NULL_HANDLE;
-        }
-        if (m.vertexBuffer != VK_NULL_HANDLE) {
-            alloc.destroyBuffer(m.vertexBuffer, m.vertexAllocation);
-            m.vertexBuffer = VK_NULL_HANDLE;
-        }
     }
 
     void init() override {
@@ -176,10 +164,10 @@ class CubeApp : public App {
         quad = createMesh(quadVertices, 4, quadIndices, 6);
         triangle = createMesh(triangleVertices, 3, nullptr, 0);
 
-        uploader.add(cubeVertices, sizeof(cubeVertices), cube.vertexBuffer, 0);
-        uploader.add(quadVertices, sizeof(quadVertices), quad.vertexBuffer, 0);
-        uploader.add(quadIndices, sizeof(quadIndices), quad.indexBuffer, 0);
-        uploader.add(triangleVertices, sizeof(triangleVertices), triangle.vertexBuffer, 0);
+        uploader.add(cubeVertices, sizeof(cubeVertices), cube.vertexBuffer.handle, 0);
+        uploader.add(quadVertices, sizeof(quadVertices), quad.vertexBuffer.handle, 0);
+        uploader.add(quadIndices, sizeof(quadIndices), quad.indexBuffer.handle, 0);
+        uploader.add(triangleVertices, sizeof(triangleVertices), triangle.vertexBuffer.handle, 0);
         uploader.upload();
 
         printf("Uploaded: cube VB=%zu, quad VB=%zu IB=%zu, tri VB=%zu\n",
@@ -212,10 +200,10 @@ class CubeApp : public App {
         vkCmdPushConstants(cmd, pipeline.layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &mvp);
 
         VkDeviceSize offset = 0;
-        vkCmdBindVertexBuffers(cmd, 0, 1, &m.vertexBuffer, &offset);
+        vkCmdBindVertexBuffers(cmd, 0, 1, &m.vertexBuffer.handle, &offset);
 
         if (m.indexCount > 0) {
-            vkCmdBindIndexBuffer(cmd, m.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+            vkCmdBindIndexBuffer(cmd, m.indexBuffer.handle, 0, VK_INDEX_TYPE_UINT32);
             vkCmdDrawIndexed(cmd, m.indexCount, 1, 0, 0, 0);
         } else {
             vkCmdDraw(cmd, m.vertexCount, 1, 0, 0);
@@ -314,11 +302,7 @@ class CubeApp : public App {
 
     void cleanup() override {
         vkDeviceWaitIdle(ctx.device);
-
         pipeline.destroy(ctx.device);
-        destroyMesh(cube);
-        destroyMesh(quad);
-        destroyMesh(triangle);
     }
 
     void update(float dt) override {
