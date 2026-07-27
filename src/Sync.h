@@ -81,6 +81,16 @@ inline void discardToGeneral(VkCommandBuffer cmd, VkImage image) {
                  VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 }
 
+// Discard depth image contents and transition to GENERAL
+inline void discardDepthToGeneral(VkCommandBuffer cmd, VkImage image) {
+    imageBarrierDepth(cmd, image,
+                      VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+                      VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                      VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+                      VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                      VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+}
+
 // Transition to PRESENT_SRC_KHR (required for presentation)
 inline void toPresent(VkCommandBuffer cmd, VkImage image) {
     imageBarrier(cmd, image,

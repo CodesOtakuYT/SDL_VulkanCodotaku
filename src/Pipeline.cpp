@@ -159,8 +159,13 @@ Pipeline Pipeline::create(VkDevice device, const PipelineConfig& config) {
     renderingInfo.colorAttachmentCount = 1;
     renderingInfo.pColorAttachmentFormats = &config.colorAttachmentFormat;
 
+    VkPipelineDepthStencilStateCreateInfo depthStencil{};
     if (config.depthAttachmentFormat != VK_FORMAT_UNDEFINED) {
         renderingInfo.depthAttachmentFormat = config.depthAttachmentFormat;
+        depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+        depthStencil.depthTestEnable = VK_TRUE;
+        depthStencil.depthWriteEnable = VK_TRUE;
+        depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
     }
 
     // --- 7. Shader stages ---
@@ -196,6 +201,7 @@ Pipeline Pipeline::create(VkDevice device, const PipelineConfig& config) {
     pipelineInfo.pMultisampleState = &multisampling;
     pipelineInfo.pColorBlendState = &colorBlending;
     pipelineInfo.pDynamicState = &dynamicState;
+    pipelineInfo.pDepthStencilState = &depthStencil;
     pipelineInfo.layout = pipeline.layout;
     pipelineInfo.renderPass = VK_NULL_HANDLE;
 

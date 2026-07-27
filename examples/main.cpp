@@ -2,22 +2,28 @@
 #include "Pipeline.h"
 #include "Sync.h"
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <chrono>
 
 struct Vertex {
-    glm::vec2 position;
+    glm::vec3 position;
     glm::vec3 color;
 };
 
 static const char *vertexShaderGLSL = R"(
 #version 450
 
-layout(location = 0) in vec2 inPosition;
+layout(push_constant) uniform PushConstants {
+    mat4 mvp;
+} pc;
+
+layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inColor;
 
 layout(location = 0) out vec3 fragColor;
 
 void main() {
-    gl_Position = vec4(inPosition, 0.0, 1.0);
+    gl_Position = pc.mvp * vec4(inPosition, 1.0);
     fragColor = inColor;
 }
 )";
@@ -33,28 +39,75 @@ void main() {
 }
 )";
 
-class TriangleApp : public App {
+static Vertex cubeVertices[] = {
+    // Front face
+    {{-0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{ 0.5f, -0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{ 0.5f,  0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{-0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{ 0.5f,  0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{-0.5f,  0.5f,  0.5f}, {1.0f, 1.0f, 0.0f}},
+    // Back face
+    {{ 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f}},
+    {{-0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 1.0f}},
+    {{-0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}},
+    {{ 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f}},
+    {{-0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}},
+    {{ 0.5f,  0.5f, -0.5f}, {0.5f, 0.5f, 0.5f}},
+    // Top face
+    {{-0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{ 0.5f,  0.5f,  0.5f}, {0.0f, 0.5f, 1.0f}},
+    {{ 0.5f,  0.5f, -0.5f}, {0.0f, 1.0f, 1.0f}},
+    {{-0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{ 0.5f,  0.5f, -0.5f}, {0.0f, 1.0f, 1.0f}},
+    {{-0.5f,  0.5f, -0.5f}, {0.0f, 0.5f, 0.5f}},
+    // Bottom face
+    {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{ 0.5f, -0.5f, -0.5f}, {0.5f, 0.0f, 0.5f}},
+    {{ 0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 1.0f}},
+    {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{ 0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 1.0f}},
+    {{-0.5f, -0.5f,  0.5f}, {0.5f, 0.0f, 0.5f}},
+    // Right face
+    {{ 0.5f, -0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{ 0.5f, -0.5f, -0.5f}, {0.0f, 0.5f, 0.5f}},
+    {{ 0.5f,  0.5f, -0.5f}, {0.0f, 1.0f, 1.0f}},
+    {{ 0.5f, -0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{ 0.5f,  0.5f, -0.5f}, {0.0f, 1.0f, 1.0f}},
+    {{ 0.5f,  0.5f,  0.5f}, {0.0f, 0.5f, 1.0f}},
+    // Left face
+    {{-0.5f, -0.5f, -0.5f}, {1.0f, 1.0f, 0.0f}},
+    {{-0.5f, -0.5f,  0.5f}, {1.0f, 0.5f, 0.5f}},
+    {{-0.5f,  0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}},
+    {{-0.5f, -0.5f, -0.5f}, {1.0f, 1.0f, 0.0f}},
+    {{-0.5f,  0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}},
+    {{-0.5f,  0.5f, -0.5f}, {1.0f, 0.5f, 1.0f}},
+};
+
+class CubeApp : public App {
     Pipeline pipeline;
     VkBuffer vertexBuffer = VK_NULL_HANDLE;
     VmaAllocation vertexAllocation = VK_NULL_HANDLE;
+
+    VkImage depthImage = VK_NULL_HANDLE;
+    VmaAllocation depthAllocation = VK_NULL_HANDLE;
+    VkImageView depthImageView = VK_NULL_HANDLE;
+
+    float angle = 0.0f;
 
     void init() override {
         auto &ctx = getContext();
         auto &swap = getSwapchain();
         auto &alloc = getAllocator();
 
-        auto vert = compileShader(vertexShaderGLSL, VK_SHADER_STAGE_VERTEX_BIT, "triangle.vert");
-        auto frag = compileShader(fragmentShaderGLSL, VK_SHADER_STAGE_FRAGMENT_BIT, "triangle.frag");
+        // Compile shaders
+        auto vert = compileShader(vertexShaderGLSL, VK_SHADER_STAGE_VERTEX_BIT, "cube.vert");
+        auto frag = compileShader(fragmentShaderGLSL, VK_SHADER_STAGE_FRAGMENT_BIT, "cube.frag");
 
-        Vertex vertices[] = {
-            {{0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-            {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-            {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-        };
-
+        // Vertex buffer
         VkBufferCreateInfo bufInfo{};
         bufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufInfo.size = sizeof(vertices);
+        bufInfo.size = sizeof(cubeVertices);
         bufInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 
         VmaAllocationCreateInfo vmaInfo{};
@@ -65,34 +118,102 @@ class TriangleApp : public App {
 
         void *data;
         alloc.mapMemory(vertexAllocation, &data);
-        memcpy(data, vertices, sizeof(vertices));
+        memcpy(data, cubeVertices, sizeof(cubeVertices));
         alloc.unmapMemory(vertexAllocation);
 
+        // Depth image
+        createDepthImage(swap);
+
+        // Pipeline with depth
         pipeline = Pipeline::create(ctx.device, {
             .shaders = {
-                {vert.spirv, VK_SHADER_STAGE_VERTEX_BIT, "triangle.vert"},
-                {frag.spirv, VK_SHADER_STAGE_FRAGMENT_BIT, "triangle.frag"},
+                {vert.spirv, VK_SHADER_STAGE_VERTEX_BIT, "cube.vert"},
+                {frag.spirv, VK_SHADER_STAGE_FRAGMENT_BIT, "cube.frag"},
             },
             .colorAttachmentFormat = swap.imageFormat,
+            .depthAttachmentFormat = VK_FORMAT_D32_SFLOAT,
         });
 
         vert.destroy(ctx.device);
         frag.destroy(ctx.device);
     }
 
+    void createDepthImage(VulkanSwapchain &swap) {
+        auto &ctx = getContext();
+        auto &alloc = getAllocator();
+
+        VkImageCreateInfo imageInfo{};
+        imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        imageInfo.imageType = VK_IMAGE_TYPE_2D;
+        imageInfo.extent = {swap.extent.x, swap.extent.y, 1};
+        imageInfo.mipLevels = 1;
+        imageInfo.arrayLayers = 1;
+        imageInfo.format = VK_FORMAT_D32_SFLOAT;
+        imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+        imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+        imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+
+        VmaAllocationCreateInfo vmaInfo{};
+        vmaInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        vmaInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+
+        vkCheck(vmaCreateImage(alloc.allocator, &imageInfo, &vmaInfo, &depthImage, &depthAllocation, nullptr),
+                "Failed to create depth image");
+
+        VkImageViewCreateInfo viewInfo{};
+        viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        viewInfo.image = depthImage;
+        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        viewInfo.format = VK_FORMAT_D32_SFLOAT;
+        viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        viewInfo.subresourceRange.levelCount = 1;
+        viewInfo.subresourceRange.layerCount = 1;
+
+        vkCheck(vkCreateImageView(ctx.device, &viewInfo, nullptr, &depthImageView),
+                "Failed to create depth image view");
+    }
+
+    void destroyDepthImage() {
+        auto &ctx = getContext();
+        auto &alloc = getAllocator();
+
+        if (depthImageView != VK_NULL_HANDLE) {
+            vkDestroyImageView(ctx.device, depthImageView, nullptr);
+            depthImageView = VK_NULL_HANDLE;
+        }
+        if (depthImage != VK_NULL_HANDLE) {
+            vmaDestroyImage(alloc.allocator, depthImage, depthAllocation);
+            depthImage = VK_NULL_HANDLE;
+            depthAllocation = VK_NULL_HANDLE;
+        }
+    }
+
     void recordFrame(const FrameInfo &frame) override {
         VkCommandBuffer cmd = frame.commandBuffer;
 
         sync::discardToGeneral(cmd, getSwapchain().images[frame.imageIndex]);
+        sync::discardDepthToGeneral(cmd, depthImage);
 
-        VkClearValue clearValue = {{{0.01f, 0.01f, 0.033f, 1.0f}}};
+        // Color attachment
+        VkClearValue colorClear = {{{0.01f, 0.01f, 0.033f, 1.0f}}};
         VkRenderingAttachmentInfo colorAttachment{};
         colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
         colorAttachment.imageView = frame.imageView;
         colorAttachment.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        colorAttachment.clearValue = clearValue;
+        colorAttachment.clearValue = colorClear;
+
+        // Depth attachment
+        VkClearValue depthClear = {{{1.0f, 0.0f}}};
+        VkRenderingAttachmentInfo depthAttachment{};
+        depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        depthAttachment.imageView = depthImageView;
+        depthAttachment.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        depthAttachment.clearValue = depthClear;
 
         VkRenderingInfo renderInfo{};
         renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -101,6 +222,7 @@ class TriangleApp : public App {
         renderInfo.layerCount = 1;
         renderInfo.colorAttachmentCount = 1;
         renderInfo.pColorAttachments = &colorAttachment;
+        renderInfo.pDepthAttachment = &depthAttachment;
 
         vkCmdBeginRendering(cmd, &renderInfo);
 
@@ -120,9 +242,19 @@ class TriangleApp : public App {
         scissor.extent = {frame.extent.x, frame.extent.y};
         vkCmdSetScissor(cmd, 0, 1, &scissor);
 
+        // Push constants — MVP
+        float aspect = static_cast<float>(frame.extent.x) / static_cast<float>(frame.extent.y);
+        glm::mat4 model = glm::rotate(glm::mat4(1.0f), angle, glm::vec3(1.0f, 1.0f, 0.0f));
+        glm::mat4 view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::mat4 proj = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 10.0f);
+        proj[1][1] *= -1; // Vulkan Y-flip
+        glm::mat4 mvp = proj * view * model;
+
+        vkCmdPushConstants(cmd, pipeline.layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &mvp);
+
         VkDeviceSize offset = 0;
         vkCmdBindVertexBuffers(cmd, 0, 1, &vertexBuffer, &offset);
-        vkCmdDraw(cmd, 3, 1, 0, 0);
+        vkCmdDraw(cmd, 36, 1, 0, 0);
 
         vkCmdEndRendering(cmd);
 
@@ -130,23 +262,33 @@ class TriangleApp : public App {
     }
 
     void cleanup() override {
-        pipeline.destroy(getContext().device);
+        auto &ctx = getContext();
+        vkDeviceWaitIdle(ctx.device);
+
+        destroyDepthImage();
+        pipeline.destroy(ctx.device);
 
         if (vertexBuffer != VK_NULL_HANDLE) {
             getAllocator().destroyBuffer(vertexBuffer, vertexAllocation);
         }
     }
 
+    void update(float dt) override {
+        angle += dt * 1.5f;
+    }
+
     void resize(glm::uvec2 size) override {
         vkDeviceWaitIdle(getContext().device);
+        destroyDepthImage();
+        createDepthImage(getSwapchain());
     }
 };
 
 int main(int argc, char *argv[]) {
     try {
-        TriangleApp app;
-        app.run("Vulkan Triangle", {1280, 720});
-    } catch (const VkbError& e) {
+        CubeApp app;
+        app.run("Vulkan Cube", {1280, 720});
+    } catch (const VkbError &e) {
         fprintf(stderr, "FATAL: %s\n", e.what());
         return 1;
     }
