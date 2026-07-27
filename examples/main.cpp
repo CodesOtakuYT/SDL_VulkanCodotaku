@@ -162,29 +162,7 @@ class TriangleApp : public App {
     }
 
     void resize(uint32_t w, uint32_t h) override {
-        auto &ctx = getContext();
-        auto &swap = getSwapchain();
-        vkDeviceWaitIdle(ctx.device);
-
-        pipeline.destroy(ctx.device);
-
-        // Recompile shaders for reflection
-        ShaderModule vert, frag;
-        vert.createFromGLSL(ctx.device, compiler, vertexShaderGLSL,
-                            VK_SHADER_STAGE_VERTEX_BIT, "triangle.vert");
-        frag.createFromGLSL(ctx.device, compiler, fragmentShaderGLSL,
-                            VK_SHADER_STAGE_FRAGMENT_BIT, "triangle.frag");
-
-        pipeline = Pipeline::create(ctx.device, {
-            .shaders = {
-                {vert.spirv, VK_SHADER_STAGE_VERTEX_BIT, "triangle.vert"},
-                {frag.spirv, VK_SHADER_STAGE_FRAGMENT_BIT, "triangle.frag"},
-            },
-            .colorAttachmentFormat = swap.imageFormat,
-        });
-
-        vert.destroy(ctx.device);
-        frag.destroy(ctx.device);
+        vkDeviceWaitIdle(getContext().device);
     }
 };
 
