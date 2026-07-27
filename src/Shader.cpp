@@ -69,34 +69,55 @@ std::vector<uint32_t> ShaderCompiler::loadSPIRVFile(const std::string& path) con
     return buffer;
 }
 
-void ShaderModule::createFromSPIRV(VkDevice device, const std::vector<uint32_t>& spirvData, VkShaderStageFlagBits shaderStage) {
+void ShaderModule::createFromSPIRV(VkDevice dev, const std::vector<uint32_t>& spirvData, VkShaderStageFlagBits shaderStage) {
     if (spirvData.empty()) throw VkbError("SPIR-V data is empty");
 
     spirv = spirvData;
+    device = dev;
 
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.codeSize = spirv.size() * sizeof(uint32_t);
     createInfo.pCode = spirv.data();
 
-    vkCheck(vkCreateShaderModule(device, &createInfo, nullptr, &module), "vkCreateShaderModule failed");
+    vkCheck(vkCreateShaderModule(dev, &createInfo, nullptr, &module), "vkCreateShaderModule failed");
     stage = shaderStage;
 
     reflectAndPrint(spirv, stage);
 }
 
-void ShaderModule::createFromGLSL(VkDevice device, const ShaderCompiler& compiler,
+void ShaderModule::createFromGLSL(VkDevice dev, const ShaderCompiler& compiler,
                                    const std::string& source, VkShaderStageFlagBits shaderStage,
                                    const std::string& filename) {
     auto spirvData = compiler.compileGLSLToSPIRV(source, shaderStage, filename);
-    createFromSPIRV(device, spirvData, shaderStage);
+    createFromSPIRV(dev, spirvData, shaderStage);
 }
 
-void ShaderModule::destroy(VkDevice device) {
-    if (module != VK_NULL_HANDLE) {
+ShaderModule::~ShaderModule() {
+    if (module != VK_NULL_HANDLE && device != VK_NULL_HANDLE) {
         vkDestroyShaderModule(device, module, nullptr);
-        module = VK_NULL_HANDLE;
     }
+}
+
+ShaderModule::ShaderModule(ShaderModule&& other) noexcept
+    : module(other.module), device(other.device), stage(other.stage), spirv(std::move(other.spirv)) {
+    other.module = VK_NULL_HANDLE;
+    other.device = VK_NULL_HANDLE;
+}
+
+ShaderModule& ShaderModule::operator=(ShaderModule&& other) noexcept {
+    if (this != &other) {
+        if (module != VK_NULL_HANDLE && device != VK_NULL_HANDLE) {
+            vkDestroyShaderModule(device, module, nullptr);
+        }
+        module = other.module;
+        device = other.device;
+        stage = other.stage;
+        spirv = std::move(other.spirv);
+        other.module = VK_NULL_HANDLE;
+        other.device = VK_NULL_HANDLE;
+    }
+    return *this;
 }
 
 VkPipelineShaderStageCreateInfo ShaderModule::stageCreateInfo(const char* entryPoint) const {

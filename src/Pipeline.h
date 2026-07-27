@@ -63,7 +63,15 @@ struct Pipeline {
     VkPipelineCache cache = VK_NULL_HANDLE;
     std::vector<VkDescriptorSetLayout> setLayouts;
     MergedReflection reflection;
+    VkDevice device = VK_NULL_HANDLE;
+
+    ~Pipeline();
+    Pipeline() = default;
+    Pipeline(Pipeline&& other) noexcept;
+    Pipeline& operator=(Pipeline&& other) noexcept;
+    Pipeline(const Pipeline&) = delete;
+    Pipeline& operator=(const Pipeline&) = delete;
 
     static Pipeline create(VkDevice device, const PipelineConfig& config);
-    void destroy(VkDevice device);
+    bool isValid() const { return handle != VK_NULL_HANDLE; }
 };

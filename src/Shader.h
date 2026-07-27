@@ -21,14 +21,22 @@ private:
 
 struct ShaderModule {
     VkShaderModule module = VK_NULL_HANDLE;
+    VkDevice device = VK_NULL_HANDLE;
     VkShaderStageFlagBits stage;
     std::vector<uint32_t> spirv;
+
+    ~ShaderModule();
+    ShaderModule() = default;
+    ShaderModule(ShaderModule&& other) noexcept;
+    ShaderModule& operator=(ShaderModule&& other) noexcept;
+    ShaderModule(const ShaderModule&) = delete;
+    ShaderModule& operator=(const ShaderModule&) = delete;
 
     void createFromSPIRV(VkDevice device, const std::vector<uint32_t>& spirv, VkShaderStageFlagBits stage);
     void createFromGLSL(VkDevice device, const ShaderCompiler& compiler,
                         const std::string& source, VkShaderStageFlagBits stage,
                         const std::string& filename = "shader.glsl");
-    void destroy(VkDevice device);
 
     VkPipelineShaderStageCreateInfo stageCreateInfo(const char* entryPoint = "main") const;
+    bool isValid() const { return module != VK_NULL_HANDLE; }
 };

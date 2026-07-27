@@ -157,8 +157,8 @@ class CubeApp : public App {
         msaaSamples = ctx.maxSampleCount();
         printf("MSAA: %dx\n", msaaSamples);
 
-        auto vert = compileShader(vertexShaderGLSL, VK_SHADER_STAGE_VERTEX_BIT, "cube.vert");
-        auto frag = compileShader(fragmentShaderGLSL, VK_SHADER_STAGE_FRAGMENT_BIT, "cube.frag");
+        ShaderModule vert = compileShader(vertexShaderGLSL, VK_SHADER_STAGE_VERTEX_BIT, "cube.vert");
+        ShaderModule frag = compileShader(fragmentShaderGLSL, VK_SHADER_STAGE_FRAGMENT_BIT, "cube.frag");
 
         cube = createMesh(cubeVertices, 36, nullptr, 0);
         quad = createMesh(quadVertices, 4, quadIndices, 6);
@@ -191,9 +191,6 @@ class CubeApp : public App {
             .depthAttachmentFormat = VK_FORMAT_D32_SFLOAT,
             .samples = msaaSamples,
         });
-
-        vert.destroy(ctx.device);
-        frag.destroy(ctx.device);
     }
 
     void drawMesh(VkCommandBuffer cmd, const Mesh &m, const glm::mat4 &mvp) {
@@ -302,7 +299,6 @@ class CubeApp : public App {
 
     void cleanup() override {
         vkDeviceWaitIdle(ctx.device);
-        pipeline.destroy(ctx.device);
     }
 
     void update(float dt) override {

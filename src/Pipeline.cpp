@@ -4,6 +4,7 @@
 
 Pipeline Pipeline::create(VkDevice device, const PipelineConfig& config) {
     Pipeline pipeline;
+    pipeline.device = device;
 
     // --- 1. Merge reflections from all shaders ---
     std::vector<std::pair<std::vector<uint32_t>, VkShaderStageFlagBits>> shaderData;
@@ -224,24 +225,45 @@ Pipeline Pipeline::create(VkDevice device, const PipelineConfig& config) {
     return pipeline;
 }
 
-void Pipeline::destroy(VkDevice device) {
-    if (handle != VK_NULL_HANDLE) {
-        vkDestroyPipeline(device, handle, nullptr);
-        handle = VK_NULL_HANDLE;
-    }
-    if (cache != VK_NULL_HANDLE) {
-        vkDestroyPipelineCache(device, cache, nullptr);
-        cache = VK_NULL_HANDLE;
-    }
-    if (layout != VK_NULL_HANDLE) {
-        vkDestroyPipelineLayout(device, layout, nullptr);
-        layout = VK_NULL_HANDLE;
-    }
+Pipeline::~Pipeline() {
+    if (device == VK_NULL_HANDLE) return;
+    if (handle != VK_NULL_HANDLE) vkDestroyPipeline(device, handle, nullptr);
+    if (cache != VK_NULL_HANDLE) vkDestroyPipelineCache(device, cache, nullptr);
+    if (layout != VK_NULL_HANDLE) vkDestroyPipelineLayout(device, layout, nullptr);
     for (auto& l : setLayouts) {
-        if (l != VK_NULL_HANDLE) {
-            vkDestroyDescriptorSetLayout(device, l, nullptr);
-            l = VK_NULL_HANDLE;
-        }
+        if (l != VK_NULL_HANDLE) vkDestroyDescriptorSetLayout(device, l, nullptr);
     }
-    setLayouts.clear();
+}
+
+Pipeline::Pipeline(Pipeline&& other) noexcept
+    : handle(other.handle), layout(other.layout), cache(other.cache),
+      setLayouts(std::move(other.setLayouts)), reflection(other.reflection), device(other.device) {
+    other.handle = VK_NULL_HANDLE;
+    other.layout = VK_NULL_HANDLE;
+    other.cache = VK_NULL_HANDLE;
+    other.device = VK_NULL_HANDLE;
+}
+
+Pipeline& Pipeline::operator=(Pipeline&& other) noexcept {
+    if (this != &other) {
+        if (device != VK_NULL_HANDLE) {
+            if (handle != VK_NULL_HANDLE) vkDestroyPipeline(device, handle, nullptr);
+            if (cache != VK_NULL_HANDLE) vkDestroyPipelineCache(device, cache, nullptr);
+            if (layout != VK_NULL_HANDLE) vkDestroyPipelineLayout(device, layout, nullptr);
+            for (auto& l : setLayouts) {
+                if (l != VK_NULL_HANDLE) vkDestroyDescriptorSetLayout(device, l, nullptr);
+            }
+        }
+        handle = other.handle;
+        layout = other.layout;
+        cache = other.cache;
+        setLayouts = std::move(other.setLayouts);
+        reflection = other.reflection;
+        device = other.device;
+        other.handle = VK_NULL_HANDLE;
+        other.layout = VK_NULL_HANDLE;
+        other.cache = VK_NULL_HANDLE;
+        other.device = VK_NULL_HANDLE;
+    }
+    return *this;
 }
